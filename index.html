@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#2F5D46">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Trilha">
+<title>Trilha — anotações em fluxo</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%232F5D46' d='M3 19h18L14 6l-3.5 5.5L9 9z'/%3E%3C/svg%3E">
+<style>
+:root{
+  --paper:#EEF1EA;
+  --paper-raised:#FFFFFF;
+  --ink:#1F2A22;
+  --ink-soft:#5B675E;
+  --line:#DBE1D5;
+  --moss:#2F5D46;
+  --moss-soft:#E1EEE6;
+  --amber:#B8862B;
+  --amber-soft:#F5E9D2;
+  --audio:#45607E;
+  --audio-soft:#E4EAF1;
+  --image:#7C5A72;
+  --image-soft:#F1E7EE;
+  --danger:#B23A3A;
+  --danger-soft:#FBEAEA;
+  --shadow:0 1px 2px rgba(31,42,34,.06), 0 6px 16px rgba(31,42,34,.07);
+  --radius:14px;
+  --radius-sm:9px;
+  --font-display:Georgia,'Iowan Old Style','Palatino Linotype','Book Antiqua',serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+}
+[data-theme="dark"]{
+  --paper:#161A17;
+  --paper-raised:#1F2420;
+  --ink:#E8ECE5;
+  --ink-soft:#98A395;
+  --line:#2B322C;
+  --moss:#7FBE9B;
+  --moss-soft:#22322A;
+  --amber:#E0B15C;
+  --amber-soft:#332A18;
+  --audio:#8FB0D6;
+  --audio-soft:#212B36;
+  --image:#D2A9C4;
+  --image-soft:#332632;
+  --danger:#E08080;
+  --danger-soft:#3A2323;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--font-body);
+  -webkit-tap-highlight-color:transparent;
+}
+button,input,textarea{font:inherit;color:inherit;}
+button{-webkit-appearance:none;appearance:none;}
+img,video{max-width:100%;display:block;}
+body.modal-open{overflow:hidden;}
+
+#app{display:flex;flex-direction:column;min-height:100%;}
+
+/* Topbar */
+.topbar{
+  position:sticky;top:0;z-index:30;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;
+  background:color-mix(in srgb, var(--paper) 92%, transparent);
+  backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);
+}
+.brand{display:flex;align-items:center;gap:8px;font-family:var(--font-display);font-size:19px;font-weight:700;}
+.brand svg{width:22px;height:22px;color:var(--moss);flex-shrink:0;}
+.topbar-actions{display:flex;gap:2px;}
+.icon-btn{
+  width:38px;height:38px;border-radius:10px;border:none;background:none;
+  color:var(--ink-soft);display:flex;align-items:center;justify-content:center;cursor:pointer;
+}
+.icon-btn svg{width:19px;height:19px;}
+.icon-btn:hover{background:var(--paper-raised);color:var(--ink);box-shadow:0 0 0 1px var(--line);}
+
+/* Breadcrumb / trilha */
+.breadcrumb{
+  display:flex;align-items:center;overflow-x:auto;
+  padding:10px 16px 8px;
+  scrollbar-width:none;
+}
+.breadcrumb::-webkit-scrollbar{display:none;}
+.crumb{
+  display:flex;align-items:center;gap:6px;background:none;border:none;
+  font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);
+  white-space:nowrap;cursor:pointer;padding:4px 2px;flex-shrink:0;
+}
+.crumb-dot{width:7px;height:7px;border-radius:50%;background:var(--line);box-shadow:0 0 0 1px var(--line);flex-shrink:0;}
+.crumb--active .crumb-dot{background:var(--moss);box-shadow:0 0 0 3px var(--moss-soft);}
+.crumb--active .crumb-label{color:var(--ink);font-weight:700;}
+.crumb-label{max-width:140px;overflow:hidden;text-overflow:ellipsis;}
+.crumb-line{width:16px;height:1px;background:repeating-linear-gradient(to right, var(--line) 0 4px, transparent 4px 7px);margin:0 3px;flex-shrink:0;}
+
+/* Main */
+.main{max-width:640px;margin:0 auto;width:100%;flex:1;display:flex;flex-direction:column;}
+.node-content{padding:14px 14px 0;}
+.node-children{padding:6px 14px 110px;}
+.section-heading{font-family:var(--font-display);font-size:19px;margin:16px 4px 10px;font-weight:700;}
+
+.empty-state{text-align:center;color:var(--ink-soft);padding:34px 18px;font-size:14px;line-height:1.6;}
+
+/* Content card (current node) */
+.content-card{background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);}
+.content-card.is-conclusion{border-color:var(--amber);}
+.content-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;}
+.content-headtext{flex:1;min-width:0;}
+.content-title{font-family:var(--font-display);font-size:22px;margin:0 0 4px;word-break:break-word;line-height:1.25;}
+.content-meta{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);}
+.badge{display:inline-flex;align-items:center;}
+.badge svg{width:14px;height:14px;}
+.badge--star,.badge--flag{color:var(--amber);}
+.badge--count{background:var(--moss-soft);color:var(--moss);font-family:var(--font-mono);font-size:10.5px;padding:2px 7px;border-radius:20px;}
+.badge--lg{background:var(--amber-soft);color:var(--amber);padding:5px 11px;border-radius:20px;font-size:12px;display:inline-flex;gap:5px;align-items:center;font-weight:700;flex-shrink:0;}
+.content-audio{width:100%;margin:8px 0;}
+.content-image{width:100%;border-radius:12px;display:block;margin:8px 0;max-height:440px;object-fit:contain;background:var(--paper);}
+.content-text{white-space:pre-wrap;line-height:1.6;font-size:15px;margin:6px 0 0;}
+.content-text--empty{color:var(--ink-soft);font-style:italic;}
+.content-caption{color:var(--ink-soft);font-size:13.5px;font-style:italic;margin:8px 0 0;}
+.content-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);}
+
+/* Cards (children list) */
+.card{
+  display:flex;align-items:stretch;background:var(--paper-raised);
+  border:1px solid var(--line);border-radius:var(--radius);margin-bottom:9px;
+  overflow:hidden;box-shadow:var(--shadow);transition:transform .1s ease;
+}
+.card:active{transform:scale(.99);}
+.card--conclusion{border-color:var(--amber);}
+.card-body{
+  flex:1;display:flex;align-items:center;gap:12px;padding:12px 13px;
+  background:none;border:none;text-align:left;cursor:pointer;min-width:0;
+}
+.card-icon{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.card-icon svg{width:17px;height:17px;}
+.card-icon--text{background:var(--moss-soft);color:var(--moss);}
+.card-icon--audio{background:var(--audio-soft);color:var(--audio);}
+.card-icon--image{background:var(--image-soft);color:var(--image);}
+.card-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.card-title{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.card-preview{font-size:12px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.card-badges{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.card-menu{
+  width:38px;border:none;background:none;color:var(--ink-soft);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;border-left:1px solid var(--line);flex-shrink:0;
+}
+.card-menu svg{width:16px;height:16px;}
+.card-menu:hover{color:var(--ink);background:var(--paper);}
+
+/* FAB */
+.fab{
+  position:fixed;right:20px;bottom:24px;width:56px;height:56px;border-radius:50%;
+  background:var(--moss);color:#fff;border:none;box-shadow:0 8px 22px rgba(0,0,0,.25);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:40;
+}
+.fab svg{width:24px;height:24px;}
+.fab:active{transform:scale(.94);}
+.fab-menu{
+  position:fixed;right:20px;bottom:92px;background:var(--paper-raised);border:1px solid var(--line);
+  border-radius:14px;box-shadow:var(--shadow);padding:6px;display:flex;flex-direction:column;gap:1px;
+  z-index:41;min-width:210px;
+}
+.fab-menu button{
+  display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;background:none;
+  text-align:left;border-radius:9px;font-size:14px;cursor:pointer;
+}
+.fab-menu button svg{width:17px;height:17px;color:var(--ink-soft);flex-shrink:0;}
+.fab-menu button:hover{background:var(--paper);}
+
+/* Popover (card menu) */
+.popover{
+  position:fixed;background:var(--paper-raised);border:1px solid var(--line);border-radius:12px;
+  box-shadow:var(--shadow);padding:6px;min-width:210px;z-index:70;display:flex;flex-direction:column;
+}
+.popover button{
+  display:flex;align-items:center;gap:10px;text-align:left;padding:9px 10px;border:none;
+  background:none;border-radius:8px;font-size:13.5px;cursor:pointer;
+}
+.popover button svg{width:15px;height:15px;color:var(--ink-soft);flex-shrink:0;}
+.popover button:hover{background:var(--paper);}
+.popover-danger{color:var(--danger) !important;}
+.popover-danger svg{color:var(--danger) !important;}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,20,16,.46);display:flex;align-items:flex-end;justify-content:center;z-index:60;}
+@media (min-width:720px){.modal-overlay{align-items:center;}}
+.modal{
+  background:var(--paper-raised);width:100%;max-width:560px;max-height:88vh;overflow-y:auto;
+  border-radius:18px 18px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.2);
+  animation:slideUp .18s ease;
+}
+@media (min-width:720px){.modal{border-radius:18px;animation:popIn .15s ease;}}
+.modal--large{max-width:680px;}
+.modal--small{max-width:420px;}
+.modal-header{
+  display:flex;align-items:center;justify-content:space-between;padding:16px 18px;
+  border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--paper-raised);z-index:2;
+}
+#modalTitle{font-family:var(--font-display);font-size:18px;margin:0;font-weight:700;}
+.modal-body{padding:18px;}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:8px;flex-wrap:wrap;}
+.modal-actions--wrap{justify-content:space-between;}
+@keyframes slideUp{from{transform:translateY(28px);opacity:.5;}to{transform:translateY(0);opacity:1;}}
+@keyframes popIn{from{transform:scale(.96);opacity:0;}to{transform:scale(1);opacity:1;}}
+
+/* Forms */
+.field{display:block;margin-bottom:14px;}
+.field span{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:6px;font-weight:700;}
+.field input,.field textarea{
+  width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+  font-size:14.5px;background:var(--paper);color:var(--ink);resize:vertical;
+}
+.field input:focus,.field textarea:focus{outline:2px solid var(--moss);outline-offset:1px;border-color:var(--moss);}
+.hint{color:var(--ink-soft);font-size:13px;line-height:1.55;}
+.confirm-text{font-size:14.5px;line-height:1.6;margin-bottom:4px;}
+
+/* Buttons */
+.btn{
+  font-size:13.8px;font-weight:700;padding:10px 15px;border-radius:10px;border:1px solid transparent;
+  cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+}
+.btn svg{width:15px;height:15px;}
+.btn-primary{background:var(--moss);color:#fff;}
+.btn-primary:hover{filter:brightness(1.06);}
+.btn-ghost{background:none;border-color:var(--line);}
+.btn-ghost:hover{background:var(--paper);}
+.btn-danger{color:var(--danger);}
+.btn-danger.btn-ghost:hover{background:var(--danger-soft);border-color:var(--danger);}
+.btn-small{padding:6px 10px;font-size:12.5px;border-radius:8px;}
+.btn[disabled]{opacity:.5;cursor:not-allowed;}
+.btn-record{background:var(--danger);color:#fff;}
+.btn-record--active{animation:pulse 1.3s ease-in-out infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(178,58,58,.45);}50%{box-shadow:0 0 0 8px rgba(178,58,58,0);}}
+
+/* Recorder / Camera */
+.recorder{display:flex;flex-direction:column;align-items:center;gap:14px;padding:6px 0 10px;}
+.recorder-time{font-family:var(--font-mono);font-size:30px;letter-spacing:1px;}
+.camera-wrap{display:flex;flex-direction:column;gap:10px;}
+.camera-wrap video,.camera-wrap img{width:100%;border-radius:12px;background:#000;max-height:56vh;object-fit:cover;}
+
+/* Library / search */
+.lib-toolbar{position:sticky;top:0;background:var(--paper-raised);padding-bottom:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:10px;z-index:2;}
+#libQuery{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:14.5px;background:var(--paper);color:var(--ink);}
+.lib-filters{display:flex;gap:6px;flex-wrap:wrap;}
+.chip{
+  display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:999px;
+  border:1px solid var(--line);background:var(--paper);color:var(--ink-soft);font-size:12.5px;cursor:pointer;
+}
+.chip svg{width:12px;height:12px;}
+.chip--active{background:var(--moss-soft);border-color:var(--moss);color:var(--moss);font-weight:700;}
+.lib-results{display:flex;flex-direction:column;gap:8px;}
+.lib-item{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--paper);}
+.lib-item-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.lib-item-title{font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px;}
+.lib-item-title svg{width:12px;height:12px;color:var(--amber);flex-shrink:0;}
+.lib-item-path{font-size:11.5px;color:var(--ink-soft);}
+.lib-item-actions{display:flex;gap:6px;flex-shrink:0;}
+
+/* Settings */
+.settings-list{display:flex;flex-direction:column;gap:6px;}
+.settings-item{
+  display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--line);
+  border-radius:12px;background:var(--paper);font-size:14.5px;cursor:pointer;text-align:left;width:100%;
+}
+.settings-item svg{width:18px;height:18px;flex-shrink:0;color:var(--ink-soft);}
+.settings-item:hover{border-color:var(--moss);}
+.settings-item--danger{color:var(--danger);}
+.settings-item--danger svg{color:var(--danger);}
+.settings-item--danger:hover{border-color:var(--danger);background:var(--danger-soft);}
+
+/* Media preview in edit modal */
+.media-preview{margin-bottom:14px;}
+.media-preview img{width:100%;border-radius:10px;}
+.media-preview audio{width:100%;}
+
+/* Toast */
+.toast{
+  position:fixed;left:50%;bottom:24px;transform:translate(-50%,16px);
+  background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:999px;font-size:13.5px;
+  opacity:0;transition:opacity .2s ease,transform .2s ease;z-index:85;max-width:88vw;text-align:center;
+  box-shadow:var(--shadow);pointer-events:none;
+}
+.toast.show{opacity:1;transform:translate(-50%,0);}
+
+/* Progress overlay */
+.progress-overlay{position:fixed;inset:0;background:rgba(15,20,16,.46);display:flex;align-items:center;justify-content:center;z-index:90;}
+.progress-box{background:var(--paper-raised);padding:26px 30px;border-radius:16px;display:flex;flex-direction:column;align-items:center;gap:12px;box-shadow:var(--shadow);max-width:80vw;text-align:center;}
+.spinner{width:28px;height:28px;border:3px solid var(--line);border-top-color:var(--moss);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.001ms !important;transition-duration:.001ms !important;}
+}
+[hidden] {
+  display: none !important;
+}
+</style>
+</head>
+<body>
+<noscript>Este aplicativo precisa de JavaScript habilitado para funcionar.</noscript>
+
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19c3-1 3-5 6-5s3 4 6 4 3-6 4-10"/><circle cx="20" cy="6" r="1.6" fill="currentColor" stroke="none"/></svg>
+      <span>Trilha</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="btnSearch" title="Buscar" aria-label="Buscar"></button>
+      <button class="icon-btn" id="btnLibrary" title="Biblioteca" aria-label="Biblioteca"></button>
+      <button class="icon-btn" id="btnMenu" title="Menu" aria-label="Menu"></button>
+    </div>
+  </header>
+
+  <nav id="breadcrumb" class="breadcrumb" aria-label="Trilha atual"></nav>
+
+  <main class="main">
+    <section id="nodeContent" class="node-content" hidden></section>
+    <section class="node-children">
+      <h2 id="childrenHeading" class="section-heading">Minhas trilhas</h2>
+      <div id="nodeList" class="node-list"></div>
+      <p id="emptyState" class="empty-state" hidden></p>
+    </section>
+  </main>
+
+  <button class="fab" id="fab" title="Adicionar" aria-label="Adicionar"></button>
+  <div class="fab-menu" id="fabMenu" hidden>
+    <button type="button" data-action="add-text"></button>
+    <button type="button" data-action="add-audio"></button>
+    <button type="button" data-action="add-photo"></button>
+    <button type="button" data-action="add-image"></button>
+    <button type="button" data-action="add-library"></button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay" hidden>
+  <div class="modal" id="modalBox" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h3 id="modalTitle"></h3>
+      <button class="icon-btn" id="modalClose" aria-label="Fechar"></button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<input type="file" id="fileImage" accept="image/*" hidden>
+<input type="file" id="fileImport" accept="application/json" hidden>
+
+<script>
+(() => {
+'use strict';
+
+/* =======================================================================
+   ÍCONES (SVG inline, sem dependências externas)
+======================================================================= */
+const ICONS = {
+  text:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>`,
+  audio: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>`,
+  image: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m4 18 5-5 3 3 4-5 4 5"/></svg>`,
+  flag:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 5h13l-3 4 3 4H5"/></svg>`,
+  star:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="m12 3 2.6 5.7 6.2.7-4.6 4.3 1.2 6.1L12 16.9 6.6 19.8l1.2-6.1L3.2 9.4l6.2-.7L12 3Z"/></svg>`,
+  plus:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
+  search:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`,
+  dots:  `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>`,
+  trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"/></svg>`,
+  edit:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/></svg>`,
+  camera:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4Z"/><circle cx="12" cy="13.5" r="3.2"/></svg>`,
+  upload:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>`,
+  download:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg>`,
+  close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>`,
+};
+ICONS.mic = ICONS.audio;
+function icon(name){ return ICONS[name] || ''; }
+
+/* =======================================================================
+   BANCO DE DADOS (IndexedDB)
+======================================================================= */
+const DB_NAME = 'trilhaDB';
+const DB_VERSION = 1;
+const STORE = 'nodes';
+const ROOT = 'root'; // chave usada para itens de nível superior (IndexedDB não indexa null)
+
+let dbPromise = null;
+function openDB(){
+  if(dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve,reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e)=>{
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains(STORE)){
+        const store = db.createObjectStore(STORE, {keyPath:'id'});
+        store.createIndex('parentId','parentId',{unique:false});
+      }
+    };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+  return dbPromise;
+}
+function reqToPromise(req){
+  return new Promise((resolve,reject)=>{
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function storeTx(mode){
+  const db = await openDB();
+  return db.transaction(STORE, mode).objectStore(STORE);
+}
+async function dbPut(node){ const s = await storeTx('readwrite'); return reqToPromise(s.put(node)); }
+async function dbGet(id){ if(!id) return null; const s = await storeTx('readonly'); return reqToPromise(s.get(id)); }
+async function dbDelete(id){ const s = await storeTx('readwrite'); return reqToPromise(s.delete(id)); }
+async function dbChildren(parentId){ const s = await storeTx('readonly'); return reqToPromise(s.index('parentId').getAll(parentId)); }
+async function dbChildCount(parentId){ const s = await storeTx('readonly'); return reqToPromise(s.index('parentId').count(parentId)); }
+async function dbClearAll(){ const s = await storeTx('readwrite'); return reqToPromise(s.clear()); }
+async function dbCursorAll(callback){
+  const s = await storeTx('readonly');
+  return new Promise((resolve,reject)=>{
+    const req = s.openCursor();
+    req.onsuccess = (e)=>{
+      const cur = e.target.result;
+      if(cur){ callback(cur.value); cur.continue(); } else resolve();
+    };
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function countAll(){ let c=0; await dbCursorAll(()=>c++); return c; }
+async function countDescendants(id){
+  let count=0, queue=[id];
+  while(queue.length){
+    const next=[];
+    for(const pid of queue){
+      const kids = await dbChildren(pid);
+      count += kids.length;
+      for(const k of kids) next.push(k.id);
+    }
+    queue = next;
+  }
+  return count;
+}
+async function deleteNodeCascade(id){
+  const toDelete = [id];
+  let queue = [id];
+  while(queue.length){
+    const next = [];
+    for(const pid of queue){
+      const kids = await dbChildren(pid);
+      for(const k of kids){ toDelete.push(k.id); next.push(k.id); }
+    }
+    queue = next;
+  }
+  const s = await storeTx('readwrite');
+  await Promise.all(toDelete.map(nid => reqToPromise(s.delete(nid))));
+  return toDelete.length;
+}
+
+/* =======================================================================
+   UTILITÁRIOS
+======================================================================= */
+function uuid(){
+  if(window.crypto && typeof crypto.randomUUID === 'function'){
+    try{ return crypto.randomUUID(); }catch(e){ /* segue para o fallback */ }
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{
+    const r = Math.random()*16|0, v = c==='x' ? r : (r&0x3|0x8);
+    return v.toString(16);
+  });
+}
+function escapeHTML(s){
+  return String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function debounce(fn, ms){
+  let t;
+  return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); };
+}
+function formatDate(ts){
+  if(!ts) return '';
+  try{
+    return new Date(ts).toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  }catch(e){ return ''; }
+}
+function formatTime(totalSeconds){
+  const m = Math.floor(totalSeconds/60).toString().padStart(2,'0');
+  const s = (totalSeconds%60).toString().padStart(2,'0');
+  return `${m}:${s}`;
+}
+function displayTitle(node){
+  if(node.title && node.title.trim()) return node.title.trim();
+  if(node.type==='text') return (node.text||'').slice(0,44) || 'Sem título';
+  if(node.type==='audio') return 'Gravação de áudio';
+  if(node.type==='image') return 'Imagem';
+  return 'Sem título';
+}
+function previewText(node){
+  if(node.type==='text') return (node.text||'').slice(0,90);
+  if(node.type==='audio') return node.text || 'Toque para ouvir';
+  if(node.type==='image') return node.text || 'Toque para ver';
+  return '';
+}
+function blobToDataURL(blob){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+function dataURLToBlob(dataUrl){ return fetch(dataUrl).then(r=>r.blob()); }
+
+/* =======================================================================
+   ESTADO / NAVEGAÇÃO
+======================================================================= */
+let currentNodeId = null;   // null = início
+let currentNode = null;
+let breadcrumbPath = [];    // [{id,title}, ...] do início até o nó atual (sem o "Início")
+
+async function buildPath(node){
+  const path = [{id:node.id, title:displayTitle(node)}];
+  let parentId = node.parentId;
+  while(parentId && parentId !== ROOT){
+    const p = await dbGet(parentId);
+    if(!p) break;
+    path.unshift({id:p.id, title:displayTitle(p)});
+    parentId = p.parentId;
+  }
+  return path;
+}
+
+async function goTo(nodeId){
+  if(nodeId === '' ) nodeId = null;
+  if(nodeId === null){
+    currentNodeId = null; currentNode = null; breadcrumbPath = [];
+  } else {
+    const n = await dbGet(nodeId);
+    if(!n){
+      currentNodeId = null; currentNode = null; breadcrumbPath = [];
+      toast('Este item não existe mais.');
+      return render();
+    }
+    currentNodeId = nodeId; currentNode = n;
+    breadcrumbPath = await buildPath(n);
+  }
+  render();
+}
+
+async function createNode({type, title='', text='', mediaBlob=null, mediaMime=null, favorite=false, isConclusion=false}){
+  const now = Date.now();
+  const node = {
+    id: uuid(),
+    parentId: currentNodeId===null ? ROOT : currentNodeId,
+    type, title, text,
+    mediaBlob: mediaBlob || undefined,
+    mediaMime: mediaMime || undefined,
+    isConclusion: !!isConclusion,
+    favorite: !!favorite,
+    order: now,
+    createdAt: now,
+    updatedAt: now
+  };
+  await dbPut(node);
+  return node;
+}
+
+async function moveNode(id, dir){
+  const node = await dbGet(id);
+  if(!node) return;
+  const kids = await dbChildren(node.parentId);
+  kids.sort((a,b)=>(a.order||0)-(b.order||0));
+  const idx = kids.findIndex(k=>k.id===id);
+  const swapIdx = dir==='up' ? idx-1 : idx+1;
+  if(swapIdx<0 || swapIdx>=kids.length) return;
+  const other = kids[swapIdx];
+  const tmp = node.order; node.order = other.order; other.order = tmp;
+  await dbPut(node); await dbPut(other);
+  render();
+}
+
+/* =======================================================================
+   RENDERIZAÇÃO
+======================================================================= */
+const elBreadcrumb = document.getElementById('breadcrumb');
+const elContent = document.getElementById('nodeContent');
+const elChildrenHeading = document.getElementById('childrenHeading');
+const elList = document.getElementById('nodeList');
+const elEmpty = document.getElementById('emptyState');
+
+let activeObjectURLs = [];
+function revokeActiveURLs(){ activeObjectURLs.forEach(u=>URL.revokeObjectURL(u)); activeObjectURLs = []; }
+function trackURL(blob){ const u = URL.createObjectURL(blob); activeObjectURLs.push(u); return u; }
+
+async function render(){
+  renderBreadcrumb();
+  await renderContent();
+  await renderChildren();
+}
+
+function renderBreadcrumb(){
+  const items = [{id:null, title:'Início'}, ...breadcrumbPath];
+  elBreadcrumb.innerHTML = items.map((it,idx)=>{
+    const isLast = idx === items.length-1;
+    return `<button type="button" class="crumb ${isLast?'crumb--active':''}" data-crumb="${it.id===null?'':escapeHTML(it.id)}">`+
+      `<span class="crumb-dot"></span><span class="crumb-label">${escapeHTML(it.title)}</span></button>`+
+      (!isLast ? '<span class="crumb-line"></span>' : '');
+  }).join('');
+  elBreadcrumb.querySelectorAll('[data-crumb]').forEach(b=>{
+    b.onclick = ()=> goTo(b.dataset.crumb || null);
+  });
+  requestAnimationFrame(()=>{ elBreadcrumb.scrollLeft = elBreadcrumb.scrollWidth; });
+}
+
+async function renderContent(){
+  revokeActiveURLs();
+  if(currentNodeId === null){
+    elContent.hidden = true;
+    elContent.innerHTML = '';
+    elChildrenHeading.textContent = 'Minhas trilhas';
+    return;
+  }
+  const n = currentNode;
+  elContent.hidden = false;
+  let mediaHTML = '';
+  if(n.type==='audio' && n.mediaBlob){
+    mediaHTML = `<audio controls src="${trackURL(n.mediaBlob)}" class="content-audio"></audio>`;
+  } else if(n.type==='image' && n.mediaBlob){
+    mediaHTML = `<img src="${trackURL(n.mediaBlob)}" class="content-image" alt="">`;
+  }
+  const bodyText = n.type==='text'
+    ? (n.text && n.text.trim()
+        ? `<p class="content-text">${escapeHTML(n.text)}</p>`
+        : `<p class="content-text content-text--empty">Sem anotação adicional.</p>`)
+    : (n.text && n.text.trim() ? `<p class="content-caption">${escapeHTML(n.text)}</p>` : '');
+
+  elContent.innerHTML = `
+    <div class="content-card ${n.isConclusion?'is-conclusion':''}">
+      <div class="content-head">
+        <span class="card-icon card-icon--${n.type}">${icon(n.type)}</span>
+        <div class="content-headtext">
+          <h1 class="content-title">${escapeHTML(displayTitle(n))}</h1>
+          <span class="content-meta">${formatDate(n.createdAt)}${(n.updatedAt && n.updatedAt!==n.createdAt) ? ' · editado '+formatDate(n.updatedAt) : ''}</span>
+        </div>
+        ${n.isConclusion ? `<span class="badge badge--lg">${icon('flag')} Conclusão</span>` : ''}
+      </div>
+      ${mediaHTML}
+      ${bodyText}
+      <div class="content-actions">
+        <button type="button" class="btn btn-ghost" id="caEdit">${icon('edit')} Editar</button>
+        <button type="button" class="btn btn-ghost" id="caFav">${icon('star')} ${n.favorite?'Remover favorito':'Favoritar'}</button>
+        <button type="button" class="btn btn-ghost" id="caFlag">${icon('flag')} ${n.isConclusion?'Desmarcar conclusão':'Marcar conclusão'}</button>
+        <button type="button" class="btn btn-ghost btn-danger" id="caDelete">${icon('trash')} Excluir</button>
+      </div>
+    </div>`;
+  elChildrenHeading.textContent = 'Próximos passos';
+
+  document.getElementById('caEdit').onclick = ()=>openEditModal(n);
+  document.getElementById('caFav').onclick = async ()=>{ n.favorite=!n.favorite; n.updatedAt=Date.now(); await dbPut(n); render(); };
+  document.getElementById('caFlag').onclick = async ()=>{ n.isConclusion=!n.isConclusion; n.updatedAt=Date.now(); await dbPut(n); render(); };
+  document.getElementById('caDelete').onclick = async ()=>{
+    const count = await countDescendants(n.id);
+    const msg = count>0
+      ? `Isso vai excluir este item e mais ${count} item(ns) dentro dele. Essa ação não pode ser desfeita.`
+      : 'Excluir este item? Essa ação não pode ser desfeita.';
+    const ok = await confirmDialog(msg, 'Excluir', true);
+    if(ok){
+      const parentId = n.parentId;
+      await deleteNodeCascade(n.id);
+      await goTo(parentId===ROOT ? null : parentId);
+      toast('Item excluído.');
+    }
+  };
+}
+
+async function renderChildren(){
+  const parentKey = currentNodeId===null ? ROOT : currentNodeId;
+  const kids = await dbChildren(parentKey);
+  kids.sort((a,b)=>(a.order||0)-(b.order||0));
+  elList.innerHTML = '';
+  if(!kids.length){
+    elEmpty.hidden = false;
+    elEmpty.textContent = currentNodeId===null
+      ? 'Nenhuma trilha ainda. Toque em + para começar.'
+      : 'Nenhum próximo passo ainda. Toque em + para continuar a trilha, ou marque esta etapa como conclusão.';
+    return;
+  }
+  elEmpty.hidden = true;
+  const counts = await Promise.all(kids.map(k=>dbChildCount(k.id)));
+  kids.forEach((node,i)=> elList.appendChild(createCardEl(node, counts[i])));
+}
+
+function createCardEl(node, count){
+  const card = document.createElement('div');
+  card.className = 'card' + (node.isConclusion ? ' card--conclusion' : '');
+  card.innerHTML = `
+    <button type="button" class="card-body" data-open="${node.id}">
+      <span class="card-icon card-icon--${node.type}">${icon(node.type)}</span>
+      <span class="card-text">
+        <span class="card-title">${escapeHTML(displayTitle(node))}</span>
+        <span class="card-preview">${escapeHTML(previewText(node))}</span>
+      </span>
+      <span class="card-badges">
+        ${node.favorite ? `<span class="badge badge--star">${icon('star')}</span>` : ''}
+        ${node.isConclusion ? `<span class="badge badge--flag">${icon('flag')}</span>` : ''}
+        ${count>0 ? `<span class="badge badge--count">${count}</span>` : ''}
+      </span>
+    </button>
+    <button type="button" class="card-menu" data-menu="${node.id}" aria-label="Mais ações">${icon('dots')}</button>
+  `;
+  return card;
+}
+
+elList.addEventListener('click', async (e)=>{
+  const openBtn = e.target.closest('[data-open]');
+  const menuBtn = e.target.closest('[data-menu]');
+  if(menuBtn){ e.stopPropagation(); openCardMenu(menuBtn.dataset.menu, menuBtn); return; }
+  if(openBtn){ await goTo(openBtn.dataset.open); }
+});
+
+/* =======================================================================
+   MENU DE CONTEXTO DO CARTÃO (popover)
+======================================================================= */
+let openMenuEl = null;
+function closeCardMenu(){
+  if(openMenuEl){ openMenuEl.remove(); openMenuEl = null; }
+  document.removeEventListener('click', closeCardMenuOutside);
+  window.removeEventListener('scroll', closeCardMenu, true);
+}
+function closeCardMenuOutside(e){ if(openMenuEl && !openMenuEl.contains(e.target)) closeCardMenu(); }
+
+async function openCardMenu(id, anchor){
+  closeCardMenu();
+  const node = await dbGet(id);
+  if(!node) return;
+  const menu = document.createElement('div');
+  menu.className = 'popover';
+  menu.innerHTML = `
+    <button type="button" data-a="edit">${icon('edit')} Editar</button>
+    <button type="button" data-a="fav">${icon('star')} ${node.favorite?'Remover favorito':'Favoritar'}</button>
+    <button type="button" data-a="flag">${icon('flag')} ${node.isConclusion?'Desmarcar conclusão':'Marcar conclusão'}</button>
+    <button type="button" data-a="up">↑ Mover para cima</button>
+    <button type="button" data-a="down">↓ Mover para baixo</button>
+    <button type="button" data-a="del" class="popover-danger">${icon('trash')} Excluir</button>
+  `;
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  const top = Math.min(r.bottom + 6, window.innerHeight - menu.offsetHeight - 8);
+  let left = r.right - menu.offsetWidth;
+  if(left < 8) left = 8;
+  menu.style.top = top + 'px';
+  menu.style.left = left + 'px';
+  openMenuEl = menu;
+  setTimeout(()=>{
+    document.addEventListener('click', closeCardMenuOutside);
+    window.addEventListener('scroll', closeCardMenu, true);
+  }, 0);
+
+  menu.onclick = async (e)=>{
+    const btn = e.target.closest('button');
+    if(!btn) return;
+    const a = btn.dataset.a;
+    closeCardMenu();
+    if(a==='edit') openEditModal(node);
+    else if(a==='fav'){ node.favorite=!node.favorite; node.updatedAt=Date.now(); await dbPut(node); render(); }
+    else if(a==='flag'){ node.isConclusion=!node.isConclusion; node.updatedAt=Date.now(); await dbPut(node); render(); }
+    else if(a==='up') moveNode(id,'up');
+    else if(a==='down') moveNode(id,'down');
+    else if(a==='del'){
+      const count = await countDescendants(id);
+      const msg = count>0
+        ? `Isso vai excluir este item e mais ${count} item(ns) dentro dele. Essa ação não pode ser desfeita.`
+        : 'Excluir este item? Essa ação não pode ser desfeita.';
+      const ok = await confirmDialog(msg, 'Excluir', true);
+      if(ok){ await deleteNodeCascade(id); render(); toast('Item excluído.'); }
+    }
+  };
+}
+
+/* =======================================================================
+   MODAL GENÉRICO
+======================================================================= */
+const overlay = document.getElementById('modalOverlay');
+const modalBox = document.getElementById('modalBox');
+const modalTitleEl = document.getElementById('modalTitle');
+const modalBodyEl = document.getElementById('modalBody');
+let modalCleanup = null;
+
+function openModal({title, bodyHTML, className='', onMount, onClose}){
+  modalTitleEl.textContent = title;
+  modalBodyEl.innerHTML = bodyHTML;
+  modalBox.className = 'modal' + (className ? ' '+className : '');
+  overlay.hidden = false;
+  document.body.classList.add('modal-open');
+  modalCleanup = onClose || null;
+  if(onMount) onMount(modalBodyEl);
+}
+function closeModal(){
+  overlay.hidden = true;
+  document.body.classList.remove('modal-open');
+  modalBodyEl.innerHTML = '';
+  const cleanup = modalCleanup;
+  modalCleanup = null;
+  if(cleanup){ try{ cleanup(); }catch(e){ console.error(e); } }
+}
+document.getElementById('modalClose').innerHTML = icon('close');
+document.getElementById('modalClose').onclick = closeModal;
+overlay.addEventListener('click', e=>{ if(e.target===overlay) closeModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !overlay.hidden) closeModal(); });
+
+function confirmDialog(message, confirmLabel='Confirmar', danger=false){
+  return new Promise(resolve=>{
+    openModal({
+      title:'Confirmar',
+      className:'modal--small',
+      bodyHTML:`
+        <p class="confirm-text">${escapeHTML(message)}</p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="cNo">Cancelar</button>
+          <button type="button" class="btn ${danger?'btn-danger btn-ghost':'btn-primary'}" id="cYes">${escapeHTML(confirmLabel)}</button>
+        </div>`,
+      onMount:(body)=>{
+        body.querySelector('#cNo').onclick = ()=>{ closeModal(); resolve(false); };
+        body.querySelector('#cYes').onclick = ()=>{ closeModal(); resolve(true); };
+      },
+      onClose: ()=> resolve(false)
+    });
+  });
+}
+
+/* =======================================================================
+   TOAST / PROGRESSO
+======================================================================= */
+let toastTimer = null;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.hidden = false;
+  requestAnimationFrame(()=> el.classList.add('show'));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{
+    el.classList.remove('show');
+    setTimeout(()=>{ el.hidden = true; }, 220);
+  }, 2600);
+}
+
+function showProgress(msg){
+  let el = document.getElementById('progressOverlay');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'progressOverlay';
+    el.className = 'progress-overlay';
+    el.innerHTML = `<div class="progress-box"><div class="spinner"></div><p id="progressMsg"></p></div>`;
+    document.body.appendChild(el);
+  }
+  el.querySelector('#progressMsg').textContent = msg;
+  el.hidden = false;
+  return {
+    update: (m)=>{ el.querySelector('#progressMsg').textContent = m; },
+    close: ()=>{ el.hidden = true; }
+  };
+}
+
+/* =======================================================================
+   TEXTO — criar / editar
+======================================================================= */
+function openTextModal(){
+  openModal({
+    title:'Novo texto',
+    bodyHTML:`
+      <label class="field"><span>Título (opcional)</span>
+        <input type="text" id="fTitle" maxlength="120" placeholder="Ex.: Etapa 1 — Diagnóstico">
+      </label>
+      <label class="field"><span>Anotação</span>
+        <textarea id="fText" rows="8" placeholder="Escreva sua anotação..."></textarea>
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="fCancel">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="fSave">${icon('check')} Salvar</button>
+      </div>`,
+    onMount:(body)=>{
+      body.querySelector('#fCancel').onclick = closeModal;
+      body.querySelector('#fSave').onclick = async ()=>{
+        const title = body.querySelector('#fTitle').value.trim();
+        const text = body.querySelector('#fText').value.trim();
+        if(!title && !text){ toast('Escreva algo antes de salvar.'); return; }
+        await createNode({type:'text', title, text});
+        closeModal();
+        render();
+      };
+      body.querySelector('#fText').focus();
+    }
+  });
+}
+
+function openEditModal(node){
+  const isText = node.type === 'text';
+  openModal({
+    title:'Editar',
+    bodyHTML:`
+      <label class="field"><span>Título</span>
+        <input type="text" id="eTitle" maxlength="120" value="${escapeHTML(node.title||'')}">
+      </label>
+      ${isText
+        ? `<label class="field"><span>Anotação</span><textarea id="eText" rows="8">${escapeHTML(node.text||'')}</textarea></label>`
+        : `<div class="media-preview" id="ePreview"></div>
+           <label class="field"><span>Legenda (opcional)</span><textarea id="eText" rows="3">${escapeHTML(node.text||'')}</textarea></label>`
+      }
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="eCancel">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="eSave">${icon('check')} Salvar</button>
+      </div>`,
+    onMount:(body)=>{
+      if(!isText && node.mediaBlob){
+        const prevWrap = body.querySelector('#ePreview');
+        if(node.type==='audio'){
+          const a = document.createElement('audio'); a.controls = true; a.src = URL.createObjectURL(node.mediaBlob);
+          prevWrap.appendChild(a);
+        } else if(node.type==='image'){
+          const im = document.createElement('img'); im.src = URL.createObjectURL(node.mediaBlob);
+          prevWrap.appendChild(im);
+        }
+      }
+      body.querySelector('#eCancel').onclick = closeModal;
+      body.querySelector('#eSave').onclick = async ()=>{
+        node.title = body.querySelector('#eTitle').value.trim();
+        node.text = body.querySelector('#eText').value.trim();
+        node.updatedAt = Date.now();
+        await dbPut(node);
+        closeModal();
+        render();
+      };
+    }
+  });
+}
+
+/* =======================================================================
+   ÁUDIO — gravação
+======================================================================= */
+let audioStream = null, audioRecorder = null, audioChunks = [], audioTimer = null, audioSeconds = 0;
+
+function pickAudioMime(){
+  const options = ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg'];
+  for(const o of options){
+    if(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(o)) return o;
+  }
+  return '';
+}
+function stopAudioCapture(){
+  if(audioRecorder && audioRecorder.state !== 'inactive'){ try{ audioRecorder.stop(); }catch(e){} }
+  if(audioStream){ audioStream.getTracks().forEach(t=>t.stop()); audioStream = null; }
+  clearInterval(audioTimer);
+  audioRecorder = null;
+}
+
+function openAudioModal(){
+  audioChunks = []; audioSeconds = 0;
+  let recordedBlob = null;
+  openModal({
+    title:'Gravar áudio',
+    bodyHTML:`
+      <div class="recorder">
+        <div class="recorder-time" id="recTime">00:00</div>
+        <button type="button" id="recToggle" class="btn btn-record">${icon('mic')} Gravar</button>
+        <audio id="recPreview" controls hidden style="width:100%;margin-top:6px"></audio>
+        <p id="recFallbackMsg" class="hint" hidden>Não foi possível acessar o microfone pelo navegador. Use o botão abaixo para gravar pelo app nativo do aparelho.</p>
+        <label class="btn btn-ghost" id="recFallbackBtn" hidden style="display:none;cursor:pointer;">
+          ${icon('mic')} Gravar com o app do aparelho
+          <input type="file" accept="audio/*" capture id="recFallbackInput" hidden>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="recCancel">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="recSave" disabled>${icon('check')} Usar áudio</button>
+      </div>`,
+    onClose: stopAudioCapture,
+    onMount:(body)=>{
+      const toggleBtn = body.querySelector('#recToggle');
+      const timeEl = body.querySelector('#recTime');
+      const preview = body.querySelector('#recPreview');
+      const saveBtn = body.querySelector('#recSave');
+      const fallbackMsg = body.querySelector('#recFallbackMsg');
+      const fallbackBtn = body.querySelector('#recFallbackBtn');
+      const fallbackInput = body.querySelector('#recFallbackInput');
+
+      body.querySelector('#recCancel').onclick = closeModal;
+
+      toggleBtn.onclick = async ()=>{
+        if(!audioRecorder || audioRecorder.state==='inactive'){
+          try{
+            audioStream = await navigator.mediaDevices.getUserMedia({audio:true});
+          }catch(err){
+            fallbackMsg.hidden = false;
+            fallbackBtn.hidden = false; fallbackBtn.style.display='inline-flex';
+            toggleBtn.disabled = true;
+            return;
+          }
+          const mime = pickAudioMime();
+          audioRecorder = mime ? new MediaRecorder(audioStream, {mimeType:mime}) : new MediaRecorder(audioStream);
+          audioChunks = [];
+          audioRecorder.ondataavailable = (e)=>{ if(e.data && e.data.size>0) audioChunks.push(e.data); };
+          audioRecorder.onstop = ()=>{
+            recordedBlob = new Blob(audioChunks, {type: audioRecorder.mimeType || 'audio/webm'});
+            preview.src = URL.createObjectURL(recordedBlob);
+            preview.hidden = false;
+            saveBtn.disabled = false;
+            clearInterval(audioTimer);
+          };
+          audioRecorder.start();
+          audioSeconds = 0; timeEl.textContent = '00:00';
+          audioTimer = setInterval(()=>{ audioSeconds++; timeEl.textContent = formatTime(audioSeconds); }, 1000);
+          toggleBtn.innerHTML = `${icon('mic')} Parar`;
+          toggleBtn.classList.add('btn-record--active');
+          preview.hidden = true; saveBtn.disabled = true;
+        } else {
+          audioRecorder.stop();
+          if(audioStream) audioStream.getTracks().forEach(t=>t.stop());
+          toggleBtn.innerHTML = `${icon('mic')} Gravar novamente`;
+          toggleBtn.classList.remove('btn-record--active');
+        }
+      };
+
+      fallbackInput.onchange = ()=>{
+        const file = fallbackInput.files[0];
+        if(file){
+          recordedBlob = file;
+          preview.src = URL.createObjectURL(file);
+          preview.hidden = false;
+          saveBtn.disabled = false;
+        }
+      };
+
+      saveBtn.onclick = async ()=>{
+        if(!recordedBlob) return;
+        await createNode({type:'audio', mediaBlob:recordedBlob, mediaMime: recordedBlob.type || 'audio/webm'});
+        closeModal();
+        render();
+        toast('Áudio adicionado.');
+      };
+    }
+  });
+}
+
+/* =======================================================================
+   FOTO — câmera
+======================================================================= */
+let cameraStream = null;
+function stopCamera(){ if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; } }
+
+function openCameraModal(){
+  let captured = null;
+  openModal({
+    title:'Tirar foto',
+    bodyHTML:`
+      <div class="camera-wrap">
+        <video id="camVideo" autoplay playsinline muted></video>
+        <canvas id="camCanvas" hidden></canvas>
+        <img id="camPreview" hidden>
+        <p id="camFallbackMsg" class="hint" hidden>Não foi possível acessar a câmera pelo navegador. Use o botão abaixo para tirar a foto pelo app nativo do aparelho.</p>
+      </div>
+      <div class="modal-actions modal-actions--wrap">
+        <label class="btn btn-ghost" id="camFallbackBtn" hidden style="display:none;cursor:pointer;">
+          ${icon('camera')} Usar câmera do aparelho
+          <input type="file" accept="image/*" capture="environment" id="camFallbackInput" hidden>
+        </label>
+        <div style="display:flex;gap:10px;margin-left:auto;">
+          <button type="button" class="btn btn-ghost" id="camCancel">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="camShutter">${icon('camera')} Capturar</button>
+          <button type="button" class="btn btn-ghost" id="camRetake" hidden>Tirar novamente</button>
+          <button type="button" class="btn btn-primary" id="camUse" hidden>${icon('check')} Usar foto</button>
+        </div>
+      </div>`,
+    onClose: stopCamera,
+    onMount:(body)=>{
+      const video = body.querySelector('#camVideo');
+      const canvas = body.querySelector('#camCanvas');
+      const previewImg = body.querySelector('#camPreview');
+      const shutterBtn = body.querySelector('#camShutter');
+      const useBtn = body.querySelector('#camUse');
+      const retakeBtn = body.querySelector('#camRetake');
+      const fallbackMsg = body.querySelector('#camFallbackMsg');
+      const fallbackBtn = body.querySelector('#camFallbackBtn');
+      const fallbackInput = body.querySelector('#camFallbackInput');
+
+      body.querySelector('#camCancel').onclick = closeModal;
+
+      if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+        navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}})
+          .then(stream=>{ cameraStream = stream; video.srcObject = stream; })
+          .catch(()=>{
+            video.hidden = true; fallbackMsg.hidden = false;
+            fallbackBtn.hidden = false; fallbackBtn.style.display='inline-flex';
+            shutterBtn.hidden = true;
+          });
+      } else {
+        video.hidden = true; fallbackMsg.hidden = false;
+        fallbackBtn.hidden = false; fallbackBtn.style.display='inline-flex';
+        shutterBtn.hidden = true;
+      }
+
+      shutterBtn.onclick = ()=>{
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob=>{
+          if(!blob) return;
+          captured = blob;
+          previewImg.src = URL.createObjectURL(blob);
+          previewImg.hidden = false; video.hidden = true;
+          shutterBtn.hidden = true; useBtn.hidden = false; retakeBtn.hidden = false;
+        }, 'image/jpeg', 0.86);
+      };
+      retakeBtn.onclick = ()=>{
+        captured = null; previewImg.hidden = true; video.hidden = false;
+        shutterBtn.hidden = false; useBtn.hidden = true; retakeBtn.hidden = true;
+      };
+      fallbackInput.onchange = ()=>{
+        const file = fallbackInput.files[0];
+        if(file){ captured = file; saveCaptured(); }
+      };
+      useBtn.onclick = saveCaptured;
+
+      async function saveCaptured(){
+        if(!captured) return;
+        await createNode({type:'image', mediaBlob:captured, mediaMime: captured.type || 'image/jpeg'});
+        closeModal();
+        render();
+        toast('Foto adicionada.');
+      }
+    }
+  });
+}
+
+/* =======================================================================
+   IMAGEM — upload da galeria / arquivos
+======================================================================= */
+const fileImage = document.getElementById('fileImage');
+fileImage.onchange = async ()=>{
+  const file = fileImage.files[0];
+  fileImage.value = '';
+  if(!file) return;
+  await createNode({type:'image', mediaBlob:file, mediaMime:file.type||'image/*'});
+  render();
+  toast('Imagem adicionada.');
+};
+
+/* =======================================================================
+   BIBLIOTECA (busca + reaproveitamento de qualquer item já criado)
+======================================================================= */
+function openLibraryModal(opts={}){
+  openModal({
+    title:'Biblioteca',
+    className:'modal--large',
+    bodyHTML:`
+      <div class="lib-toolbar">
+        <input type="search" id="libQuery" placeholder="Buscar por título ou texto...">
+        <div class="lib-filters">
+          <button type="button" class="chip chip--active" data-type="all">Tudo</button>
+          <button type="button" class="chip" data-type="text">${icon('text')} Texto</button>
+          <button type="button" class="chip" data-type="audio">${icon('audio')} Áudio</button>
+          <button type="button" class="chip" data-type="image">${icon('image')} Imagem</button>
+          <button type="button" class="chip" data-fav="1">${icon('star')} Favoritos</button>
+        </div>
+      </div>
+      <div id="libResults" class="lib-results"><p class="hint">Carregando…</p></div>`,
+    onMount:(body)=>{
+      let typeFilter = 'all';
+      let favOnly = !!opts.favOnly;
+      let queryText = '';
+      const resultsEl = body.querySelector('#libResults');
+      const chips = Array.from(body.querySelectorAll('.chip'));
+      const queryInput = body.querySelector('#libQuery');
+
+      if(favOnly){
+        chips.forEach(c=>{ if(c.dataset.fav) c.classList.add('chip--active'); });
+      }
+
+      queryInput.oninput = debounce((e)=>{ queryText = e.target.value.trim().toLowerCase(); refresh(); }, 220);
+
+      chips.forEach(chip=>{
+        chip.onclick = ()=>{
+          if(chip.dataset.fav){
+            favOnly = !favOnly;
+            chip.classList.toggle('chip--active', favOnly);
+          } else {
+            typeFilter = chip.dataset.type;
+            chips.forEach(c=>{ if(!c.dataset.fav) c.classList.remove('chip--active'); });
+            chip.classList.add('chip--active');
+          }
+          refresh();
+        };
+      });
+
+      async function refresh(){
+        resultsEl.innerHTML = '<p class="hint">Buscando…</p>';
+        const matches = [];
+        await dbCursorAll(node=>{
+          if(matches.length >= 200) return;
+          if(typeFilter!=='all' && node.type!==typeFilter) return;
+          if(favOnly && !node.favorite) return;
+          if(queryText){
+            const hay = ((node.title||'')+' '+(node.text||'')).toLowerCase();
+            if(!hay.includes(queryText)) return;
+          }
+          matches.push(node);
+        });
+        matches.sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
+        await renderLibResults(matches, resultsEl);
+      }
+      if(opts.focusSearch){ setTimeout(()=>queryInput.focus(), 60); }
+      refresh();
+    }
+  });
+}
+
+async function renderLibResults(matches, container){
+  if(!matches.length){ container.innerHTML = '<p class="hint">Nada encontrado.</p>'; return; }
+  container.innerHTML = '';
+  for(const node of matches){
+    const parent = (node.parentId===ROOT || !node.parentId) ? null : await dbGet(node.parentId);
+    const parentLabel = parent ? displayTitle(parent) : 'Início';
+    const row = document.createElement('div');
+    row.className = 'lib-item';
+    row.innerHTML = `
+      <span class="card-icon card-icon--${node.type}">${icon(node.type)}</span>
+      <span class="lib-item-text">
+        <span class="lib-item-title">${escapeHTML(displayTitle(node))}${node.isConclusion?icon('flag'):''}</span>
+        <span class="lib-item-path">Em: ${escapeHTML(parentLabel)}</span>
+      </span>
+      <span class="lib-item-actions">
+        <button type="button" class="btn btn-small btn-ghost" data-goto="${node.id}">Abrir</button>
+        <button type="button" class="btn btn-small btn-primary" data-insert="${node.id}">Inserir aqui</button>
+      </span>`;
+    container.appendChild(row);
+  }
+  container.onclick = async (e)=>{
+    const gotoBtn = e.target.closest('[data-goto]');
+    const insertBtn = e.target.closest('[data-insert]');
+    if(gotoBtn){ closeModal(); await goTo(gotoBtn.dataset.goto); return; }
+    if(insertBtn){
+      const src = await dbGet(insertBtn.dataset.insert);
+      if(src){
+        await createNode({type:src.type, title:src.title, text:src.text, mediaBlob:src.mediaBlob, mediaMime:src.mediaMime});
+        toast('Item inserido na trilha atual.');
+        closeModal();
+        render();
+      }
+    }
+  };
+}
+
+/* =======================================================================
+   MENU / CONFIGURAÇÕES — importar, exportar, tema, apagar tudo
+======================================================================= */
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  try{ localStorage.setItem('trilha-theme', t); }catch(e){}
+}
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme');
+  applyTheme(cur==='dark' ? 'light' : 'dark');
+}
+(function initTheme(){
+  let saved = null;
+  try{ saved = localStorage.getItem('trilha-theme'); }catch(e){}
+  if(saved){ applyTheme(saved); }
+  else{
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(prefersDark ? 'dark' : 'light');
+  }
+})();
+
+function openSettingsModal(){
+  openModal({
+    title:'Menu',
+    bodyHTML:`
+      <div class="settings-list">
+        <button type="button" class="settings-item" id="stExport">${icon('download')} <span>Exportar dados (.json)</span></button>
+        <button type="button" class="settings-item" id="stImport">${icon('upload')} <span>Importar dados (.json)</span></button>
+        <button type="button" class="settings-item" id="stTheme">🌓 <span>Alternar tema claro/escuro</span></button>
+        <button type="button" class="settings-item settings-item--danger" id="stClear">${icon('trash')} <span>Apagar todos os dados</span></button>
+      </div>
+      <p class="hint" style="margin-top:14px;">Total de itens salvos: <strong id="stCount">…</strong></p>`,
+    onMount: async (body)=>{
+      countAll().then(c=>{ const el = body.querySelector('#stCount'); if(el) el.textContent = c; });
+      body.querySelector('#stExport').onclick = exportData;
+      body.querySelector('#stImport').onclick = ()=>{ closeModal(); fileImportEl.click(); };
+      body.querySelector('#stTheme').onclick = toggleTheme;
+      body.querySelector('#stClear').onclick = async ()=>{
+        closeModal();
+        const ok = await confirmDialog('Isso vai apagar TODOS os itens salvos permanentemente. Exporte um backup antes, se quiser. Deseja continuar?', 'Apagar tudo', true);
+        if(ok){
+          await dbClearAll();
+          currentNodeId = null; currentNode = null; breadcrumbPath = [];
+          render();
+          toast('Todos os dados foram apagados.');
+        }
+      };
+    }
+  });
+}
+
+/* --------- Exportar --------- */
+async function exportData(){
+  closeModal();
+  const progress = showProgress('Preparando exportação…');
+  try{
+    const all = [];
+    await dbCursorAll(node => all.push(node));
+    const out = [];
+    for(let i=0;i<all.length;i++){
+      const n = all[i];
+      const item = {
+        id:n.id, parentId:n.parentId, type:n.type, title:n.title||'', text:n.text||'',
+        isConclusion:!!n.isConclusion, favorite:!!n.favorite, order:n.order,
+        createdAt:n.createdAt, updatedAt:n.updatedAt,
+        mediaMime: n.mediaMime || null, mediaDataUrl: null
+      };
+      if(n.mediaBlob){ item.mediaDataUrl = await blobToDataURL(n.mediaBlob); }
+      out.push(item);
+      if(i % 20 === 0) progress.update(`Exportando… ${i+1}/${all.length}`);
+    }
+    const payload = { app:'trilha-notas', version:1, exportedAt:new Date().toISOString(), nodes:out };
+    const json = JSON.stringify(payload);
+    const blob = new Blob([json], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,10);
+    a.href = url; a.download = `trilha-notas-${stamp}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    progress.close();
+    toast(`Exportado: ${out.length} item(ns).`);
+  }catch(err){
+    progress.close();
+    console.error(err);
+    toast('Erro ao exportar. Veja o console para detalhes.');
+  }
+}
+
+/* --------- Importar --------- */
+const fileImportEl = document.getElementById('fileImport');
+fileImportEl.onchange = async ()=>{
+  const file = fileImportEl.files[0];
+  fileImportEl.value = '';
+  if(!file) return;
+  const progress = showProgress('Lendo arquivo…');
+  let payload;
+  try{
+    const text = await file.text();
+    payload = JSON.parse(text);
+    if(!payload || !Array.isArray(payload.nodes)) throw new Error('Formato inválido');
+  }catch(err){
+    progress.close();
+    console.error(err);
+    toast('Erro ao importar: arquivo inválido.');
+    return;
+  }
+  progress.close();
+
+  const mode = await importModeDialog(payload.nodes.length);
+  if(mode==='cancel') return;
+
+  const progress2 = showProgress('Importando…');
+  try{
+    if(mode==='replace'){ await dbClearAll(); }
+    const idMap = new Map();
+    for(const n of payload.nodes) idMap.set(n.id, uuid());
+    let i = 0;
+    for(const n of payload.nodes){
+      const newId = mode==='replace' ? n.id : idMap.get(n.id);
+      let parentId;
+      if(!n.parentId || n.parentId===ROOT){ parentId = ROOT; }
+      else if(idMap.has(n.parentId)){ parentId = mode==='replace' ? n.parentId : idMap.get(n.parentId); }
+      else { parentId = ROOT; }
+      const rec = {
+        id:newId, parentId, type:n.type, title:n.title||'', text:n.text||'',
+        isConclusion:!!n.isConclusion, favorite:!!n.favorite,
+        order:n.order || Date.now(), createdAt:n.createdAt || Date.now(), updatedAt:n.updatedAt || Date.now(),
+        mediaMime: n.mediaMime || undefined, mediaBlob: undefined
+      };
+      if(n.mediaDataUrl){ rec.mediaBlob = await dataURLToBlob(n.mediaDataUrl); }
+      await dbPut(rec);
+      i++;
+      if(i % 20 === 0) progress2.update(`Importando… ${i}/${payload.nodes.length}`);
+    }
+    progress2.close();
+    currentNodeId = null; currentNode = null; breadcrumbPath = [];
+    render();
+    toast(`Importado: ${i} item(ns).`);
+  }catch(err){
+    progress2.close();
+    console.error(err);
+    toast('Erro durante a importação. Veja o console para detalhes.');
+  }
+};
+
+function importModeDialog(n){
+  return new Promise(resolve=>{
+    openModal({
+      title:'Importar dados',
+      bodyHTML:`
+        <p class="confirm-text">O arquivo contém ${n} item(ns). Como deseja importar?</p>
+        <div class="settings-list">
+          <button type="button" class="settings-item" id="imMerge">${icon('check')} <span>Adicionar como novas trilhas (mantém o que já existe)</span></button>
+          <button type="button" class="settings-item settings-item--danger" id="imReplace">${icon('trash')} <span>Substituir todos os dados atuais</span></button>
+        </div>
+        <div class="modal-actions"><button type="button" class="btn btn-ghost" id="imCancel">Cancelar</button></div>`,
+      onMount:(body)=>{
+        body.querySelector('#imMerge').onclick = ()=>{ closeModal(); resolve('merge'); };
+        body.querySelector('#imReplace').onclick = ()=>{ closeModal(); resolve('replace'); };
+        body.querySelector('#imCancel').onclick = ()=>{ closeModal(); resolve('cancel'); };
+      },
+      onClose: ()=> resolve('cancel')
+    });
+  });
+}
+
+/* =======================================================================
+   CABEÇALHO / FAB — ligações de eventos
+======================================================================= */
+document.getElementById('btnSearch').innerHTML = icon('search');
+document.getElementById('btnLibrary').innerHTML = icon('star');
+document.getElementById('btnMenu').innerHTML = icon('dots');
+document.getElementById('btnSearch').onclick = ()=> openLibraryModal({focusSearch:true});
+document.getElementById('btnLibrary').onclick = ()=> openLibraryModal({favOnly:true});
+document.getElementById('btnMenu').onclick = openSettingsModal;
+
+const fab = document.getElementById('fab');
+const fabMenu = document.getElementById('fabMenu');
+fab.innerHTML = icon('plus');
+fab.onclick = (e)=>{ e.stopPropagation(); fabMenu.hidden = !fabMenu.hidden; };
+document.addEventListener('click', ()=>{ fabMenu.hidden = true; });
+fabMenu.addEventListener('click', e=> e.stopPropagation());
+
+const fabActions = {
+  'add-text':  {label:'Texto',          icon:'text'},
+  'add-audio': {label:'Áudio',          icon:'audio'},
+  'add-photo': {label:'Foto',           icon:'camera'},
+  'add-image': {label:'Imagem (galeria)', icon:'image'},
+  'add-library': {label:'Da biblioteca', icon:'star'}
+};
+fabMenu.querySelectorAll('button[data-action]').forEach(btn=>{
+  const conf = fabActions[btn.dataset.action];
+  btn.innerHTML = `${icon(conf.icon)} ${conf.label}`;
+  btn.onclick = ()=>{
+    fabMenu.hidden = true;
+    const action = btn.dataset.action;
+    if(action==='add-text') openTextModal();
+    else if(action==='add-audio') openAudioModal();
+    else if(action==='add-photo') openCameraModal();
+    else if(action==='add-image') fileImage.click();
+    else if(action==='add-library') openLibraryModal({insertMode:true});
+  };
+});
+
+/* =======================================================================
+   INÍCIO
+======================================================================= */
+render();
+
+})();
+</script>
+</body>
+</html>
