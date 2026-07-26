@@ -127,8 +127,48 @@ body.modal-open{overflow:hidden;}
 .badge--lg{background:var(--amber-soft);margin-top: 4px; color:var(--amber);padding:5px 11px;border-radius:20px;font-size:12px;display:inline-flex;gap:5px;align-items:center;font-weight:700;flex-shrink:0;}
 .content-audio{width:100%;margin:8px 0;}
 .content-image{width:100%;border-radius:12px;display:block;margin:8px 0;max-height:440px;object-fit:contain;background:var(--paper);}
-.content-text{white-space:pre-wrap;line-height:1.6;font-size:15px;margin:6px 0 0;}
-.content-text--empty{color:var(--ink-soft);font-style:italic;}
+/* --- Textos e Códigos --- */
+.text-block-wrapper { position: relative; margin: 12px 0 0; }
+.content-text {
+  white-space: pre;
+  word-wrap: break-word;
+  font-family: var(--font-mono); /* Deixa com cara de código */
+  background: var(--paper);
+  padding: 38px 14px 14px 14px; /* Espaço extra no topo para o botão */
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  line-height: 1.6;
+  font-size: 14px;
+  margin: 0;
+  overflow-x: auto;
+}
+.content-text--empty {
+  font-family: var(--font-body);
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+.btn-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+.btn-copy svg { width: 14px; height: 14px; }
+.btn-copy:hover { color: var(--moss); border-color: var(--moss); }
 .content-caption{color:var(--ink-soft);font-size:13.5px;font-style:italic;margin:8px 0 0;}
 .content-actions{display:flex;justify-content: center;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);}
 
@@ -682,9 +722,15 @@ async function renderContent(){
   } else if(n.type==='image' && n.mediaBlob){
     mediaHTML = `<img src="${trackURL(n.mediaBlob)}" class="content-image" alt="">`;
   }
-  const bodyText = n.type==='text'
+const bodyText = n.type==='text'
     ? (n.text && n.text.trim()
-        ? `<p class="content-text">${escapeHTML(n.text)}</p>`
+        ? `<div class="text-block-wrapper">
+             <button type="button" class="btn-copy" id="btnCopyText" title="Copiar texto">
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+               Copiar
+             </button>
+             <pre class="content-text">${escapeHTML(n.text)}</pre>
+           </div>`
         : `<p class="content-text content-text--empty">Sem anotação adicional.</p>`)
     : (n.text && n.text.trim() ? `<p class="content-caption">${escapeHTML(n.text)}</p>` : '');
 
@@ -753,6 +799,29 @@ async function renderContent(){
   document.getElementById('caEdit').onclick = ()=>openEditModal(n);
   document.getElementById('caFav').onclick = async ()=>{ n.favorite=!n.favorite; n.updatedAt=Date.now(); await dbPut(n); render(); };
   document.getElementById('caFlag').onclick = async ()=>{ n.isConclusion=!n.isConclusion; n.updatedAt=Date.now(); await dbPut(n); render(); };
+  // Lógica de copiar texto/código
+  const copyBtn = document.getElementById('btnCopyText');
+  if (copyBtn) {
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(n.text);
+        const originalHTML = copyBtn.innerHTML;
+        // Muda o visual para "Copiado!" com um ícone de check
+        copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Copiado!`;
+        copyBtn.style.color = 'var(--moss)';
+        copyBtn.style.borderColor = 'var(--moss)';
+        
+        // Volta ao normal depois de 2 segundos
+        setTimeout(() => {
+          copyBtn.innerHTML = originalHTML;
+          copyBtn.style.color = '';
+          copyBtn.style.borderColor = '';
+        }, 2000);
+      } catch (err) {
+        toast('Erro ao copiar o texto.');
+      }
+    };
+  }
   document.getElementById('caDelete').onclick = async ()=>{
     const count = await countDescendants(n.id);
     const msg = count>0
