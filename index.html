@@ -426,7 +426,8 @@ body.modal-open{overflow:hidden;}
     <button type="button" data-action="add-image"></button>
     <button type="button" data-action="add-library"></button>
     <hr style="border:0; border-top:1px solid var(--line); margin:4px 0;">
-    <button type="button" data-action="calc-budget"></button>
+    <button type="button" data-action="calc-budget" style="color: var(--moss);"></button>
+    <button type="button" data-action="reset-budget" style="color: var(--danger);"></button>
   </div>
 </div>
 
@@ -854,18 +855,6 @@ async function renderChildren(){
   elEmpty.hidden = true;
   const counts = await Promise.all(kids.map(k=>dbChildCount(k.id)));
   kids.forEach((node,i)=> elList.appendChild(createCardEl(node, counts[i])));
-}
-
-function extractValue(text) {
-  if(!text) return 0;
-  // Procura valores como R$ 150, R$ 150,00 ou 150,00
-  let match = text.match(/R\$\s*(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/i);
-  if(!match) match = text.match(/\b(\d{1,3}(?:\.\d{3})*,\d{2})\b/);
-  if(match) {
-    const numStr = match[1].replace(/\./g, '').replace(',', '.');
-    return parseFloat(numStr) || 0;
-  }
-  return 0;
 }
 
 function createCardEl(node, count){
@@ -1628,19 +1617,122 @@ fab.onclick = (e)=>{ e.stopPropagation(); fabMenu.hidden = !fabMenu.hidden; };
 document.addEventListener('click', ()=>{ fabMenu.hidden = true; });
 fabMenu.addEventListener('click', e=> e.stopPropagation());
 
-const fabActions = {
-  'add-text':  {label:'Texto',          icon:'text'},
-  'add-audio': {label:'Áudio',          icon:'audio'},
-  'add-photo': {label:'Foto',           icon:'camera'},
-  'add-image': {label:'Imagem (galeria)', icon:'image'},
-  'add-library': {label:'Da biblioteca', icon:'star'},
-  'calc-budget': {label:'Calcular Orçamento', icon:'check'}
+/* =======================================================================
+   LÓGICA DE ORÇAMENTO E FAB (BOTÃO FLUTUANTE)
+======================================================================= */
+
+function extractValue(text) {
+  if(!text) return 0;
+  let match = text.match(/R\$\s*(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/i);
+  if(!match) match = text.match(/\b(\d{1,3}(?:\.\d{3})*,\d{2})\b/);
+  if(match) {
+    const numStr = match[1].replace(/\./g, '').replace(',', '.');
+    return parseFloat(numStr) || 0;
+  }
+  return 0;
+}
+
+async function getFlowNodes() {
+  let nodes = [];
+  if (currentNodeId === null || breadcrumbPath.length === 0) {
+    await dbCursorAll(n => nodes.push(n));
+  } else {
+    const rootFlowId = breadcrumbPath[0].id;
+    const baseNode = await dbGet(rootFlowId);
+    if (baseNode) nodes.push(baseNode);
+
+    let queue = [rootFlowId];
+    while (queue.length > 0) {
+      const next = [];
+      for (const pid of queue) {
+        const kids = await dbChildren(pid);
+        for (const k of kids) {
+          nodes.push(k);
+          next.push(k.id);
+        }
+      }
+      queue = next;
+    }
+  }
+  return nodes;
+}
+
+async function getRouteNodes() {
+  const nodes = [];
+  if (breadcrumbPath && breadcrumbPath.length > 0) {
+    for (const b of breadcrumbPath) {
+      const n = await dbGet(b.id);
+      if (n) nodes.push(n);
+    }
+  }
+  return nodes;
+}
+
+// 3. Lógica Dinâmica do Botão Verde
+fab.onclick = async (e) => {
+  e.stopPropagation();
+  
+  if (fabMenu.hidden) {
+    let hasCheckedGlobally = false;
+    let hasBudgetInRoute = false;
+    
+    // Caça TUDO que está marcado no APP INTEIRO (Carrinho atual do cliente)
+    await dbCursorAll(n => {
+      if (n.isBudgetDone) hasCheckedGlobally = true;
+    });
+    
+    // Lê os valores APENAS da rota onde você está
+    const routeNodes = await getRouteNodes();
+    routeNodes.forEach(n => {
+      if (Math.max(extractValue(n.title), extractValue(n.text)) > 0) hasBudgetInRoute = true;
+    });
+
+    const btnCalc = fabMenu.querySelector('[data-action="calc-budget"]');
+    const btnReset = fabMenu.querySelector('[data-action="reset-budget"]');
+    const hrDivider = fabMenu.querySelector('hr');
+    
+    // Mostra o botão Calcular se houver algo checado no app OU algum valor na rota atual
+    if (currentNodeId !== null && (hasBudgetInRoute || hasCheckedGlobally)) {
+      btnCalc.style.display = 'flex';
+    } else {
+      btnCalc.style.display = 'none';
+    }
+    
+    if (hasCheckedGlobally) {
+      btnReset.style.display = 'flex';
+    } else {
+      btnReset.style.display = 'none';
+    }
+    
+    if ((currentNodeId !== null && (hasBudgetInRoute || hasCheckedGlobally)) || hasCheckedGlobally) {
+      hrDivider.style.display = 'block';
+    } else {
+      hrDivider.style.display = 'none';
+    }
+
+    fabMenu.hidden = false;
+  } else {
+    fabMenu.hidden = true;
+  }
 };
 
-fabMenu.querySelectorAll('button[data-action]').forEach(btn=>{
+// 4. Ações do Menu
+const fabActions = {
+  'add-text':    {label:'Texto',             icon:'text'},
+  'add-audio':   {label:'Áudio',             icon:'audio'},
+  'add-photo':   {label:'Foto',              icon:'camera'},
+  'add-image':   {label:'Imagem (galeria)',  icon:'image'},
+  'add-library': {label:'Da biblioteca',     icon:'star'},
+  'calc-budget': {label:'Gerar Orçamento',   icon:'check'},
+  'reset-budget':{label:'Zerar Executados',  icon:'trash'}
+};
+
+fabMenu.querySelectorAll('button[data-action]').forEach(btn => {
   const conf = fabActions[btn.dataset.action];
+  if(!conf) return;
   btn.innerHTML = `${icon(conf.icon)} ${conf.label}`;
-  btn.onclick = async ()=>{
+  
+  btn.onclick = async () => {
     fabMenu.hidden = true;
     const action = btn.dataset.action;
     
@@ -1649,46 +1741,138 @@ fabMenu.querySelectorAll('button[data-action]').forEach(btn=>{
     else if(action==='add-photo') openCameraModal();
     else if(action==='add-image') fileImage.click();
     else if(action==='add-library') openLibraryModal({insertMode:true});
+    
+    // === GERAR ORÇAMENTO (REAL GLOBAL + ESTIMADO DA ROTA) ===
     else if(action==='calc-budget') {
-      const parentKey = currentNodeId===null ? ROOT : currentNodeId;
-      const kids = await dbChildren(parentKey);
-      let totalGeral = 0;
+      const routeNodes = await getRouteNodes();
+      const formata = (v) => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits:2});
+      
+      // PARTE 1: O que já foi executado (Buscando no banco de dados INTEIRO)
       let totalExecutado = 0;
-      let countExecutado = 0;
-
-      kids.forEach(n => {
-        const val = Math.max(extractValue(n.title), extractValue(n.text));
-        if(val > 0) {
-          totalGeral += val;
-          if(n.isBudgetDone) { totalExecutado += val; countExecutado++; }
+      let executedItems = [];
+      
+      await dbCursorAll(n => {
+        if (n.isBudgetDone) {
+          const val = Math.max(extractValue(n.title), extractValue(n.text));
+          if (val > 0) {
+            totalExecutado += val;
+            executedItems.push(`• [x] ${displayTitle(n)} - ${formata(val)}`);
+          }
         }
       });
 
-      if(totalGeral === 0) {
-        toast('Nenhum valor encontrado. Use "R$" nas anotações (Ex: R$ 150,00).');
-        return;
-      }
+      // PARTE 2: O caminho atual (Estimativa daquilo que NÃO está marcado)
+      let totalEstimado = 0;
+      let routeItems = [];
+      
+      routeNodes.forEach(n => {
+        const val = Math.max(extractValue(n.title), extractValue(n.text));
+        let valStr = val > 0 ? ` - ${formata(val)}` : '';
+        let prefix = '';
+        
+        if (n.isBudgetDone) {
+          prefix = '• [x] '; 
+        } else {
+          prefix = '• [ ] ';
+          if (val > 0) totalEstimado += val; // Só soma na estimativa o que não foi pago
+        }
+        
+        routeItems.push(`${prefix}${displayTitle(n)}${valStr}`);
+      });
 
-      const formata = (v) => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits:2});
+      let totalGeral = totalExecutado + totalEstimado;
+
+      // Montando o texto para copiar
+      let finalCopyText = 'RESUMO DO DIAGNÓSTICO:\n\n';
+      
+      if (executedItems.length > 0) {
+        finalCopyText += '✅ SERVIÇOS EXECUTADOS (Gasto Real):\n';
+        finalCopyText += executedItems.join('\n');
+        finalCopyText += `\nSubtotal: ${formata(totalExecutado)}\n\n`;
+      }
+      
+      finalCopyText += '🔍 ROTA ATUAL (Estimativa p/ Aprovação):\n';
+      finalCopyText += routeItems.join('\n');
+      if (totalEstimado > 0) {
+        finalCopyText += `\nSubtotal a fazer: ${formata(totalEstimado)}\n`;
+      }
+      
+      finalCopyText += `\n💰 TOTAL GERAL: ${formata(totalGeral)}`;
+
       openModal({
-        title: 'Resumo do Cliente',
+        title: 'Orçamento do Diagnóstico',
         bodyHTML: `
-          <div class="total-budget-box">
-            <h4>Já Executado (${countExecutado} itens)</h4>
-            <div class="val">${formata(totalExecutado)}</div>
-            <div class="sub">Total Orçado: ${formata(totalGeral)}</div>
+          <div class="total-budget-box" style="padding: 14px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom: 12px; font-size: 13.5px;">
+               <div style="text-align:left;">
+                 <span style="color:var(--ink-soft); font-weight:normal;">Realizado</span><br>
+                 <strong style="color:var(--ink);">${formata(totalExecutado)}</strong>
+               </div>
+               <div style="text-align:right;">
+                 <span style="color:var(--ink-soft); font-weight:normal;">Estimado</span><br>
+                 <strong style="color:var(--ink);">${formata(totalEstimado)}</strong>
+               </div>
+            </div>
+            <hr style="border:0; border-top:1px solid var(--moss-soft); margin: 0 0 10px 0;">
+            <h4 style="margin:0; font-size: 12px; text-transform:uppercase;">Total Geral</h4>
+            <div class="val" style="font-size: 24px;">${formata(totalGeral)}</div>
           </div>
+          
+          <div style="margin-top: 14px;">
+            <div class="content-text" style="padding: 12px; margin-top: 6px; font-size: 13px; max-height: 250px; overflow-y: auto; white-space: pre-wrap;">${escapeHTML(finalCopyText)}</div>
+          </div>
+
           <div class="modal-actions" style="margin-top:20px;">
             <button type="button" class="btn btn-primary" id="bOk">Fechar</button>
+            <button type="button" class="btn btn-ghost" id="bCopyRoute">${icon('text')} Copiar</button>
           </div>`,
-        onMount: (body) => body.querySelector('#bOk').onclick = closeModal
+        onMount: (body) => {
+          body.querySelector('#bOk').onclick = closeModal;
+          
+          const copyBtn = body.querySelector('#bCopyRoute');
+          copyBtn.onclick = async () => {
+            try {
+              await navigator.clipboard.writeText(finalCopyText);
+              const originalHTML = copyBtn.innerHTML;
+              copyBtn.innerHTML = `${icon('check')} Copiado!`;
+              copyBtn.style.color = 'var(--moss)';
+              setTimeout(() => {
+                copyBtn.innerHTML = originalHTML;
+                copyBtn.style.color = '';
+              }, 2000);
+            } catch(e) {
+              toast('Erro ao copiar.');
+            }
+          };
+        }
       });
+    }
+    
+    // === ZERAR EXECUTADOS ===
+    else if(action==='reset-budget') {
+      const nodes = await getFlowNodes(); 
+      let toReset = nodes.filter(n => n.isBudgetDone);
+      
+      let msg = currentNodeId === null 
+        ? `Você está no Início. Isso vai desmarcar TODAS as ${toReset.length} caixinhas do aplicativo inteiro. Continuar?`
+        : `Desmarcar as ${toReset.length} caixinhas concluídas de todo este fluxo e suas ramificações?`;
+        
+      const ok = await confirmDialog(msg, 'Sim, zerar', true);
+      
+      if (ok) {
+        for (const n of toReset) {
+          n.isBudgetDone = false;
+          await dbPut(n);
+        }
+        render(); 
+        toast('Caixinhas zeradas com sucesso!');
+      }
     }
   };
 });
 
 /* =======================================================================
-   INÍCIO
+   INÍCIO DO APP
 ======================================================================= */
 render();
 
