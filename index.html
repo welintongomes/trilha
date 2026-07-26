@@ -210,8 +210,8 @@ body.modal-open{overflow:hidden;}
   border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--paper-raised);z-index:2;
 }
 #modalTitle{font-family:var(--font-display);font-size:18px;margin:0;font-weight:700;}
-.modal-body{padding:18px;}
-.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:8px;flex-wrap:wrap;}
+.modal-body{padding: 18px 18px 60px 18px;}
+.modal-actions{display:flex;justify-content:flex-start;gap:10px;margin-top:8px;flex-wrap:wrap;}
 .modal-actions--wrap{justify-content:space-between;}
 @keyframes slideUp{from{transform:translateY(28px);opacity:.5;}to{transform:translateY(0);opacity:1;}}
 @keyframes popIn{from{transform:scale(.96);opacity:0;}to{transform:scale(1);opacity:1;}}
@@ -313,7 +313,7 @@ body.modal-open{overflow:hidden;}
     right: 0;
     bottom: 0;
 
-    z-index: 9999;
+    z-index: 69;
 
     display: flex;
     align-items: center;
@@ -851,8 +851,8 @@ function confirmDialog(message, confirmLabel='Confirmar', danger=false){
           <button type="button" class="btn ${danger?'btn-danger btn-ghost':'btn-primary'}" id="cYes">${escapeHTML(confirmLabel)}</button>
         </div>`,
       onMount:(body)=>{
-        body.querySelector('#cNo').onclick = ()=>{ closeModal(); resolve(false); };
-        body.querySelector('#cYes').onclick = ()=>{ closeModal(); resolve(true); };
+        body.querySelector('#cNo').onclick = ()=>{ resolve(false); closeModal(); };
+        body.querySelector('#cYes').onclick = ()=>{ resolve(true); closeModal(); };
       },
       onClose: ()=> resolve(false)
     });
