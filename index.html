@@ -124,13 +124,13 @@ body.modal-open{overflow:hidden;}
 .badge svg{width:14px;height:14px;}
 .badge--star,.badge--flag{color:var(--amber);}
 .badge--count{background:var(--moss-soft);color:var(--moss);font-family:var(--font-mono);font-size:10.5px;padding:2px 7px;border-radius:20px;}
-.badge--lg{background:var(--amber-soft);color:var(--amber);padding:5px 11px;border-radius:20px;font-size:12px;display:inline-flex;gap:5px;align-items:center;font-weight:700;flex-shrink:0;}
+.badge--lg{background:var(--amber-soft);margin-top: 4px; color:var(--amber);padding:5px 11px;border-radius:20px;font-size:12px;display:inline-flex;gap:5px;align-items:center;font-weight:700;flex-shrink:0;}
 .content-audio{width:100%;margin:8px 0;}
 .content-image{width:100%;border-radius:12px;display:block;margin:8px 0;max-height:440px;object-fit:contain;background:var(--paper);}
 .content-text{white-space:pre-wrap;line-height:1.6;font-size:15px;margin:6px 0 0;}
 .content-text--empty{color:var(--ink-soft);font-style:italic;}
 .content-caption{color:var(--ink-soft);font-size:13.5px;font-style:italic;margin:8px 0 0;}
-.content-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);}
+.content-actions{display:flex;justify-content: center;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);}
 
 /* Cards (children list) */
 .card{
@@ -326,6 +326,27 @@ body.modal-open{overflow:hidden;}
 
     scrollbar-width: none;
 }
+/* --- Estilos do Orçamento --- */
+.budget-check-wrap { display: flex; align-items: center; padding: 0 0 0 14px; }
+.budget-check {
+  -webkit-appearance: none; appearance: none;
+  width: 22px; height: 22px; margin: 0;
+  border: 2px solid var(--line); border-radius: 6px;
+  background: var(--paper); cursor: pointer; position: relative;
+}
+.budget-check:checked { background: var(--moss); border-color: var(--moss); }
+.budget-check:checked::after {
+  content: ''; position: absolute; top: 3px; left: 7px;
+  width: 4px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.total-budget-box {
+  background: var(--moss-soft); padding: 18px; border-radius: 12px; margin-top: 10px;
+  text-align: center; color: var(--moss);
+}
+.total-budget-box h4 { margin: 0 0 6px; font-size: 14px; color: var(--ink-soft); }
+.total-budget-box .val { font-size: 28px; font-weight: 700; font-family: var(--font-display); }
+.total-budget-box .sub { font-size: 13.5px; margin-top: 8px; font-weight: bold; opacity: 0.8; }
 </style>
 </head>
 <body>
@@ -362,6 +383,8 @@ body.modal-open{overflow:hidden;}
     <button type="button" data-action="add-photo"></button>
     <button type="button" data-action="add-image"></button>
     <button type="button" data-action="add-library"></button>
+    <hr style="border:0; border-top:1px solid var(--line); margin:4px 0;">
+    <button type="button" data-action="calc-budget"></button>
   </div>
 </div>
 
@@ -665,27 +688,64 @@ async function renderContent(){
         : `<p class="content-text content-text--empty">Sem anotação adicional.</p>`)
     : (n.text && n.text.trim() ? `<p class="content-caption">${escapeHTML(n.text)}</p>` : '');
 
+  // Verifica se a anotação atual tem valor de dinheiro (Orçamento)
+  const valTitle = extractValue(n.title);
+  const valText = extractValue(n.text);
+  const isBudget = (valTitle > 0 || valText > 0);
+
   elContent.innerHTML = `
     <div class="content-card ${n.isConclusion?'is-conclusion':''}">
       <div class="content-head">
         <span class="card-icon card-icon--${n.type}">${icon(n.type)}</span>
         <div class="content-headtext">
-          <h1 class="content-title">${escapeHTML(displayTitle(n))}</h1>
           <span class="content-meta">${formatDate(n.createdAt)}${(n.updatedAt && n.updatedAt!==n.createdAt) ? ' · editado '+formatDate(n.updatedAt) : ''}</span>
+          <h1 class="content-title">${escapeHTML(displayTitle(n))}</h1>
+          
         </div>
-        ${n.isConclusion ? `<span class="badge badge--lg">${icon('flag')} Conclusão</span>` : ''}
+        
       </div>
       ${mediaHTML}
       ${bodyText}
+      ${n.isConclusion ? `<span class="badge badge--lg">${icon('flag')} Conclusão</span>` : ''}
       <div class="content-actions">
+        
+
         <button type="button" class="btn btn-ghost" id="caEdit">${icon('edit')} Editar</button>
         <button type="button" class="btn btn-ghost" id="caFav">${icon('star')} ${n.favorite?'Remover favorito':'Favoritar'}</button>
         <button type="button" class="btn btn-ghost" id="caFlag">${icon('flag')} ${n.isConclusion?'Desmarcar conclusão':'Marcar conclusão'}</button>
         <button type="button" class="btn btn-ghost btn-danger" id="caDelete">${icon('trash')} Excluir</button>
+        <!-- Novo botão de Voltar -->
+        <button type="button" class="btn btn-ghost" id="caBack">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Voltar
+        </button>
+
+        <!-- Nova caixinha de Concluído (só aparece se for orçamento) -->
+        ${isBudget ? `
+        <label class="btn btn-ghost" style="cursor:pointer; display:inline-flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="caBudget" class="budget-check" style="margin:0; width:18px; height:18px; min-height:18px;" ${n.isBudgetDone ? 'checked' : ''}> 
+          Executado
+        </label>` : ''}
       </div>
     </div>`;
   elChildrenHeading.textContent = 'Próximos passos';
 
+  // Lógica do botão de voltar
+  document.getElementById('caBack').onclick = () => {
+    goTo(n.parentId === ROOT ? null : n.parentId);
+  };
+
+  // Lógica da caixinha de marcação
+  if(isBudget) {
+    document.getElementById('caBudget').onchange = async (e) => {
+      n.isBudgetDone = e.target.checked;
+      n.updatedAt = Date.now();
+      await dbPut(n);
+      // Ao marcar aqui, automaticamente vai atualizar no cálculo total!
+    };
+  }
+
+  // Lógicas antigas que já funcionavam
   document.getElementById('caEdit').onclick = ()=>openEditModal(n);
   document.getElementById('caFav').onclick = async ()=>{ n.favorite=!n.favorite; n.updatedAt=Date.now(); await dbPut(n); render(); };
   document.getElementById('caFlag').onclick = async ()=>{ n.isConclusion=!n.isConclusion; n.updatedAt=Date.now(); await dbPut(n); render(); };
@@ -721,10 +781,29 @@ async function renderChildren(){
   kids.forEach((node,i)=> elList.appendChild(createCardEl(node, counts[i])));
 }
 
+function extractValue(text) {
+  if(!text) return 0;
+  // Procura valores como R$ 150, R$ 150,00 ou 150,00
+  let match = text.match(/R\$\s*(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/i);
+  if(!match) match = text.match(/\b(\d{1,3}(?:\.\d{3})*,\d{2})\b/);
+  if(match) {
+    const numStr = match[1].replace(/\./g, '').replace(',', '.');
+    return parseFloat(numStr) || 0;
+  }
+  return 0;
+}
+
 function createCardEl(node, count){
   const card = document.createElement('div');
   card.className = 'card' + (node.isConclusion ? ' card--conclusion' : '');
+  
+  // Detecção inteligente: só mostra caixinha se tiver valor em dinheiro
+  const valTitle = extractValue(node.title);
+  const valText = extractValue(node.text);
+  const isBudget = (valTitle > 0 || valText > 0);
+
   card.innerHTML = `
+    ${isBudget ? `<div class="budget-check-wrap"><input type="checkbox" class="budget-check" data-budget="${node.id}" ${node.isBudgetDone ? 'checked' : ''}></div>` : ''}
     <button type="button" class="card-body" data-open="${node.id}">
       <span class="card-icon card-icon--${node.type}">${icon(node.type)}</span>
       <span class="card-text">
@@ -749,6 +828,16 @@ elList.addEventListener('click', async (e)=>{
   if(openBtn){ await goTo(openBtn.dataset.open); }
 });
 
+elList.addEventListener('change', async (e)=>{
+  if(e.target.classList.contains('budget-check')){
+    const id = e.target.dataset.budget;
+    const node = await dbGet(id);
+    if(node){
+      node.isBudgetDone = e.target.checked;
+      await dbPut(node);
+    }
+  }
+});
 /* =======================================================================
    MENU DE CONTEXTO DO CARTÃO (popover)
 ======================================================================= */
@@ -1469,19 +1558,57 @@ const fabActions = {
   'add-audio': {label:'Áudio',          icon:'audio'},
   'add-photo': {label:'Foto',           icon:'camera'},
   'add-image': {label:'Imagem (galeria)', icon:'image'},
-  'add-library': {label:'Da biblioteca', icon:'star'}
+  'add-library': {label:'Da biblioteca', icon:'star'},
+  'calc-budget': {label:'Calcular Orçamento', icon:'check'}
 };
+
 fabMenu.querySelectorAll('button[data-action]').forEach(btn=>{
   const conf = fabActions[btn.dataset.action];
   btn.innerHTML = `${icon(conf.icon)} ${conf.label}`;
-  btn.onclick = ()=>{
+  btn.onclick = async ()=>{
     fabMenu.hidden = true;
     const action = btn.dataset.action;
+    
     if(action==='add-text') openTextModal();
     else if(action==='add-audio') openAudioModal();
     else if(action==='add-photo') openCameraModal();
     else if(action==='add-image') fileImage.click();
     else if(action==='add-library') openLibraryModal({insertMode:true});
+    else if(action==='calc-budget') {
+      const parentKey = currentNodeId===null ? ROOT : currentNodeId;
+      const kids = await dbChildren(parentKey);
+      let totalGeral = 0;
+      let totalExecutado = 0;
+      let countExecutado = 0;
+
+      kids.forEach(n => {
+        const val = Math.max(extractValue(n.title), extractValue(n.text));
+        if(val > 0) {
+          totalGeral += val;
+          if(n.isBudgetDone) { totalExecutado += val; countExecutado++; }
+        }
+      });
+
+      if(totalGeral === 0) {
+        toast('Nenhum valor encontrado. Use "R$" nas anotações (Ex: R$ 150,00).');
+        return;
+      }
+
+      const formata = (v) => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits:2});
+      openModal({
+        title: 'Resumo do Cliente',
+        bodyHTML: `
+          <div class="total-budget-box">
+            <h4>Já Executado (${countExecutado} itens)</h4>
+            <div class="val">${formata(totalExecutado)}</div>
+            <div class="sub">Total Orçado: ${formata(totalGeral)}</div>
+          </div>
+          <div class="modal-actions" style="margin-top:20px;">
+            <button type="button" class="btn btn-primary" id="bOk">Fechar</button>
+          </div>`,
+        onMount: (body) => body.querySelector('#bOk').onclick = closeModal
+      });
+    }
   };
 });
 
