@@ -191,6 +191,7 @@ body.modal-open{overflow:hidden;}
 .card-icon--text{background:var(--moss-soft);color:var(--moss);}
 .card-icon--audio{background:var(--audio-soft);color:var(--audio);}
 .card-icon--image{background:var(--image-soft);color:var(--image);}
+.card-icon--link { background: var(--paper); color: var(--ink-soft); border: 1px dashed var(--line); }
 .card-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
 .card-title{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .card-preview{font-size:12px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -455,6 +456,7 @@ body.modal-open{overflow:hidden;}
    ÍCONES (SVG inline, sem dependências externas)
 ======================================================================= */
 const ICONS = {
+  link:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`,
   text:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>`,
   audio: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>`,
   image: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m4 18 5-5 3 3 4-5 4 5"/></svg>`,
@@ -591,6 +593,7 @@ function displayTitle(node){
   if(node.type==='text') return (node.text||'').slice(0,44) || 'Sem título';
   if(node.type==='audio') return 'Gravação de áudio';
   if(node.type==='image') return 'Imagem';
+  if(node.type==='link') return 'Atalho';
   return 'Sem título';
 }
 function previewText(node){
@@ -645,7 +648,7 @@ async function goTo(nodeId){
   render();
 }
 
-async function createNode({type, title='', text='', mediaBlob=null, mediaMime=null, favorite=false, isConclusion=false}){
+async function createNode({type, title='', text='', mediaBlob=null, mediaMime=null, favorite=false, isConclusion=false, targetId=null}){
   const now = Date.now();
   const node = {
     id: uuid(),
@@ -653,6 +656,7 @@ async function createNode({type, title='', text='', mediaBlob=null, mediaMime=nu
     type, title, text,
     mediaBlob: mediaBlob || undefined,
     mediaMime: mediaMime || undefined,
+    targetId: targetId || undefined, // <- NOVA LINHA: Guarda o endereço do portal
     isConclusion: !!isConclusion,
     favorite: !!favorite,
     order: now,
@@ -862,23 +866,26 @@ function createCardEl(node, count){
   const card = document.createElement('div');
   card.className = 'card' + (node.isConclusion ? ' card--conclusion' : '');
   
-  // Detecção inteligente: só mostra caixinha se tiver valor em dinheiro
   const valTitle = extractValue(node.title);
   const valText = extractValue(node.text);
   const isBudget = (valTitle > 0 || valText > 0);
 
+  // Se for atalho, muda o destino do clique e o textinho de prévia
+  const openId = node.type === 'link' ? node.targetId : node.id;
+  const displayDesc = node.type === 'link' ? '🔗 Atalho para outra etapa' : escapeHTML(previewText(node));
+
   card.innerHTML = `
-    ${isBudget ? `<div class="budget-check-wrap"><input type="checkbox" class="budget-check" data-budget="${node.id}" ${node.isBudgetDone ? 'checked' : ''}></div>` : ''}
-    <button type="button" class="card-body" data-open="${node.id}">
+    ${isBudget && node.type !== 'link' ? `<div class="budget-check-wrap"><input type="checkbox" class="budget-check" data-budget="${node.id}" ${node.isBudgetDone ? 'checked' : ''}></div>` : ''}
+    <button type="button" class="card-body" data-open="${openId}">
       <span class="card-icon card-icon--${node.type}">${icon(node.type)}</span>
       <span class="card-text">
         <span class="card-title">${escapeHTML(displayTitle(node))}</span>
-        <span class="card-preview">${escapeHTML(previewText(node))}</span>
+        <span class="card-preview">${displayDesc}</span>
       </span>
       <span class="card-badges">
         ${node.favorite ? `<span class="badge badge--star">${icon('star')}</span>` : ''}
         ${node.isConclusion ? `<span class="badge badge--flag">${icon('flag')}</span>` : ''}
-        ${count>0 ? `<span class="badge badge--count">${count}</span>` : ''}
+        ${count>0 && node.type !== 'link' ? `<span class="badge badge--count">${count}</span>` : ''}
       </span>
     </button>
     <button type="button" class="card-menu" data-menu="${node.id}" aria-label="Mais ações">${icon('dots')}</button>
@@ -1413,27 +1420,40 @@ async function renderLibResults(matches, container){
         <span class="lib-item-path">Em: ${escapeHTML(parentLabel)}</span>
       </span>
       <span class="lib-item-actions">
-        <button type="button" class="btn btn-small btn-ghost" data-goto="${node.id}">Abrir</button>
-        <button type="button" class="btn btn-small btn-primary" data-insert="${node.id}">Inserir aqui</button>
+        <!-- NOVOS BOTÕES -->
+        <button type="button" class="btn btn-small btn-primary" data-link="${node.id}">Criar Atalho</button>
+        <button type="button" class="btn btn-small btn-ghost" data-insert="${node.id}">Duplicar</button>
       </span>`;
     container.appendChild(row);
   }
+  
   container.onclick = async (e)=>{
-    const gotoBtn = e.target.closest('[data-goto]');
+    const linkBtn = e.target.closest('[data-link]');
     const insertBtn = e.target.closest('[data-insert]');
-    if(gotoBtn){ closeModal(); await goTo(gotoBtn.dataset.goto); return; }
+    
+    // Ação 1: Cria apenas um portal apontando para a tela original
+    if(linkBtn){
+      const src = await dbGet(linkBtn.dataset.link);
+      if(src){
+        await createNode({type:'link', title: src.title, targetId: src.id});
+        toast('Atalho criado na trilha atual.');
+        closeModal();
+        render();
+      }
+    }
+    
+    // Ação 2: Cria uma cópia (clone) idêntica
     if(insertBtn){
       const src = await dbGet(insertBtn.dataset.insert);
       if(src){
         await createNode({type:src.type, title:src.title, text:src.text, mediaBlob:src.mediaBlob, mediaMime:src.mediaMime});
-        toast('Item inserido na trilha atual.');
+        toast('Cópia independente inserida.');
         closeModal();
         render();
       }
     }
   };
 }
-
 /* =======================================================================
    MENU / CONFIGURAÇÕES — importar, exportar, tema, apagar tudo
 ======================================================================= */
