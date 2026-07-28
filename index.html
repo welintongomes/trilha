@@ -118,7 +118,7 @@ body.modal-open{overflow:hidden;}
 .content-card.is-conclusion{border-color:var(--amber);}
 .content-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;}
 .content-headtext{flex:1;min-width:0;}
-.content-title{font-family:var(--font-display);font-size:20px;margin:0 0 4px;word-break:break-word;line-height:1.25;}
+.content-title{font-family:var(--font-display);font-size:15px;margin:0 0 4px;word-break:break-word;line-height:1.25;}
 .content-meta{font-family:var(--font-mono);font-size:10px;color:var(--ink-soft);}
 .badge{display:inline-flex;align-items:center;}
 .badge svg{width:14px;height:14px;}
@@ -134,7 +134,7 @@ body.modal-open{overflow:hidden;}
   word-wrap: break-word;
   font-family: var(--font-mono); /* Deixa com cara de código */
   background: var(--paper);
-  padding: 38px 14px 14px 14px; /* Espaço extra no topo para o botão */
+  padding: 30px 14px 14px 14px; /* Espaço extra no topo para o botão */
   border-radius: 10px;
   border: 1px solid var(--line);
   line-height: 1.6;
@@ -153,23 +153,23 @@ body.modal-open{overflow:hidden;}
   text-align: center;
 }
 .btn-copy {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  background: var(--paper-raised);
-  border: 1px solid var(--line);
-  color: var(--ink-soft);
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
+    position: absolute;
+    top: 2px;
+    left: 6px;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    padding: 5px 5px;
+    border-radius: 6px;
+    font-size: 9px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
 }
-.btn-copy svg { width: 14px; height: 14px; }
+.btn-copy svg { width: 12px; height: 12px; }
 .btn-copy:hover { color: var(--moss); border-color: var(--moss); }
 .content-caption{color:var(--ink-soft);font-size:13.5px;font-style:italic;margin:8px 0 0;}
 .content-actions{display:flex;justify-content: center;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);}
@@ -304,7 +304,7 @@ body.modal-open{overflow:hidden;}
 }
 .chip svg{width:12px;height:12px;}
 .chip--active{background:var(--moss-soft);border-color:var(--moss);color:var(--moss);font-weight:700;}
-.lib-results{display:flex;flex-direction:column;gap:8px;}
+.lib-results{display:flex;flex-direction:column;gap:8px;max-height: 280px;overflow-y: scroll;}
 .lib-item{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--paper);}
 .lib-item-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
 .lib-item-title{font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px;}
@@ -415,7 +415,7 @@ body.modal-open{overflow:hidden;}
     <section id="nodeContent" class="node-content" hidden></section>
     <section class="node-children">
       <h2 id="childrenHeading" class="section-heading">Minhas trilhas</h2>
-      <div id="nodeList" class="node-list"></div>
+      <div id="nodeList" class="node-list" style="border-radius: 3%;overflow-y: auto;max-height: 244px;"></div>
       <p id="emptyState" class="empty-state" hidden></p>
     </section>
   </main>
