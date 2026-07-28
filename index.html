@@ -1408,30 +1408,46 @@ function openLibraryModal(opts={}){
 async function renderLibResults(matches, container){
   if(!matches.length){ container.innerHTML = '<p class="hint">Nada encontrado.</p>'; return; }
   container.innerHTML = '';
+  
   for(const node of matches){
     const parent = (node.parentId===ROOT || !node.parentId) ? null : await dbGet(node.parentId);
     const parentLabel = parent ? displayTitle(parent) : 'Início';
     const row = document.createElement('div');
     row.className = 'lib-item';
+    row.style.padding = '0'; // Tira o padding do container para colocar no botão interno
+    
     row.innerHTML = `
-      <span class="card-icon card-icon--${node.type}">${icon(node.type)}</span>
-      <span class="lib-item-text">
-        <span class="lib-item-title">${escapeHTML(displayTitle(node))}${node.isConclusion?icon('flag'):''}</span>
-        <span class="lib-item-path">Em: ${escapeHTML(parentLabel)}</span>
-      </span>
-      <span class="lib-item-actions">
-        <!-- NOVOS BOTÕES -->
-        <button type="button" class="btn btn-small btn-primary" data-link="${node.id}">+Atalho</button>
-        <button type="button" class="btn btn-small btn-ghost" data-insert="${node.id}">Duplicar</button>
+      <!-- ÁREA CLICÁVEL PRINCIPAL (Navega para o item) -->
+      <button type="button" class="lib-item-body" data-goto="${node.id}" style="display:flex; align-items:center; gap:10px; flex:1; min-width:0; background:none; border:none; text-align:left; padding:10px; cursor:pointer;">
+        <span class="card-icon card-icon--${node.type}">${icon(node.type)}</span>
+        <span class="lib-item-text">
+          <span class="lib-item-title">${escapeHTML(displayTitle(node))}${node.isConclusion?icon('flag'):''}</span>
+          <span class="lib-item-path">Em: ${escapeHTML(parentLabel)}</span>
+        </span>
+      </button>
+      
+      <!-- AÇÕES EXTRAS AO LADO -->
+      <span class="lib-item-actions" style="padding-right: 10px;">
+        <button type="button" class="btn btn-small btn-primary" data-link="${node.id}">Atalho</button>
+        <button type="button" class="btn btn-small btn-ghost" data-insert="${node.id}">Cópia</button>
       </span>`;
+      
     container.appendChild(row);
   }
   
   container.onclick = async (e)=>{
+    const gotoBtn = e.target.closest('[data-goto]');
     const linkBtn = e.target.closest('[data-link]');
     const insertBtn = e.target.closest('[data-insert]');
     
-    // Ação 1: Cria apenas um portal apontando para a tela original
+    // Ação Principal: Clicou no corpo do item -> Navega direto pra lá!
+    if(gotoBtn){
+      closeModal();
+      await goTo(gotoBtn.dataset.goto);
+      return;
+    }
+    
+    // Ação: Cria apenas um portal apontando para a tela original
     if(linkBtn){
       const src = await dbGet(linkBtn.dataset.link);
       if(src){
@@ -1442,7 +1458,7 @@ async function renderLibResults(matches, container){
       }
     }
     
-    // Ação 2: Cria uma cópia (clone) idêntica
+    // Ação: Cria uma cópia (clone) idêntica
     if(insertBtn){
       const src = await dbGet(insertBtn.dataset.insert);
       if(src){
