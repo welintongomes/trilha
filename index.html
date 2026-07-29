@@ -766,6 +766,9 @@ async function renderContent(){
         <div class= "alinhar">
             <button type="button" class="btn btn-ghost" id="caEdit">${icon('edit')} Editar</button>
             <button type="button" class="btn btn-ghost" id="caFlag">${icon('flag')} ${n.isConclusion?'Etapa':'Conclusão?'}</button>
+            <button type="button" class="btn btn-ghost" id="caFav" title="${n.favorite ? 'Remover favorito' : 'Favoritar'}" style="padding: 10px; ${n.favorite ? 'color: var(--amber);' : ''}">
+          ${icon('star').replace('fill="none"', n.favorite ? 'fill="currentColor"' : 'fill="none"')}
+        </button>
         </div>
         <div class="alinhar2">
         
@@ -773,9 +776,6 @@ async function renderContent(){
         <button type="button" class="btn btn-ghost" id="caBack">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
           Voltar
-        </button>
-        <button type="button" class="btn btn-ghost" id="caFav" title="${n.favorite ? 'Remover favorito' : 'Favoritar'}" style="padding: 10px; ${n.favorite ? 'color: var(--amber);' : ''}">
-          ${icon('star').replace('fill="none"', n.favorite ? 'fill="currentColor"' : 'fill="none"')}
         </button>
         <!-- Nova caixinha de Concluído (só aparece se for orçamento) -->
         ${isBudget ? `
