@@ -1656,26 +1656,43 @@ fileImportEl.onchange = async ()=>{
   const progress2 = showProgress('Importando…');
   try{
     if(mode==='replace'){ await dbClearAll(); }
+    
+    // 1. Cria os novos IDs (RGs novos) para não misturar com o que já existe
     const idMap = new Map();
     for(const n of payload.nodes) idMap.set(n.id, uuid());
+    
     let i = 0;
     for(const n of payload.nodes){
       const newId = mode==='replace' ? n.id : idMap.get(n.id);
+      
+      // 2. Atualiza quem é o "Pai" da anotação
       let parentId;
       if(!n.parentId || n.parentId===ROOT){ parentId = ROOT; }
       else if(idMap.has(n.parentId)){ parentId = mode==='replace' ? n.parentId : idMap.get(n.parentId); }
       else { parentId = ROOT; }
+
+      // 3. A MÁGICA DOS ATALHOS AQUI: Atualiza o destino do link!
+      let targetId = n.targetId || undefined;
+      if (mode === 'merge' && targetId && idMap.has(targetId)) {
+        targetId = idMap.get(targetId); // Traduz pro novo RG!
+      }
+      
       const rec = {
         id:newId, parentId, type:n.type, title:n.title||'', text:n.text||'',
         isConclusion:!!n.isConclusion, favorite:!!n.favorite,
         order:n.order || Date.now(), createdAt:n.createdAt || Date.now(), updatedAt:n.updatedAt || Date.now(),
+        targetId: targetId, // <- Salva o link corrigido
+        isBudgetDone: !!n.isBudgetDone,
         mediaMime: n.mediaMime || undefined, mediaBlob: undefined
       };
+      
       if(n.mediaDataUrl){ rec.mediaBlob = await dataURLToBlob(n.mediaDataUrl); }
       await dbPut(rec);
+      
       i++;
       if(i % 20 === 0) progress2.update(`Importando… ${i}/${payload.nodes.length}`);
     }
+    
     progress2.close();
     currentNodeId = null; currentNode = null; breadcrumbPath = [];
     render();
