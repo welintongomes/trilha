@@ -730,7 +730,7 @@ async function renderContent(){
   } else if(n.type==='image' && n.mediaBlob){
     mediaHTML = `<img src="${trackURL(n.mediaBlob)}" class="content-image" alt="">`;
   }
-const bodyText = n.type==='text'
+  const bodyText = n.type==='text'
     ? (n.text && n.text.trim()
         ? `<div class="text-block-wrapper">
              <button type="button" class="btn-copy" id="btnCopyText" title="Copiar texto">
@@ -765,7 +765,6 @@ const bodyText = n.type==='text'
         
         <div class= "alinhar">
             <button type="button" class="btn btn-ghost" id="caEdit">${icon('edit')} Editar</button>
-            <button type="button" class="btn btn-ghost" id="caFav">${icon('star')} ${n.favorite?'Remover favorito':'Favoritar'}</button>
             <button type="button" class="btn btn-ghost" id="caFlag">${icon('flag')} ${n.isConclusion?'Etapa':'Conclusão?'}</button>
         </div>
         <div class="alinhar2">
@@ -775,14 +774,17 @@ const bodyText = n.type==='text'
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
           Voltar
         </button>
-        
+        <button type="button" class="btn btn-ghost" id="caFav" title="${n.favorite ? 'Remover favorito' : 'Favoritar'}" style="padding: 10px; ${n.favorite ? 'color: var(--amber);' : ''}">
+          ${icon('star').replace('fill="none"', n.favorite ? 'fill="currentColor"' : 'fill="none"')}
+        </button>
         <!-- Nova caixinha de Concluído (só aparece se for orçamento) -->
         ${isBudget ? `
         <label class="btn btn-ghost" style="cursor:pointer; display:inline-flex; align-items:center; gap:8px;">
           <input type="checkbox" id="caBudget" class="budget-check" style="margin:0; width:18px; height:18px; min-height:18px;" ${n.isBudgetDone ? 'checked' : ''}> 
           Executado
         </label>` : ''}
-        <button type="button" class="btn btn-ghost btn-danger" id="caDelete">${icon('trash')} Excluir</button>
+        <button type="button" class="btn btn-ghost" id="caExport">${icon('download')} </button>
+        <button type="button" class="btn btn-ghost btn-danger" id="caDelete">${icon('trash')} </button>
         </div>
       </div>
     </div>`;
@@ -804,6 +806,7 @@ const bodyText = n.type==='text'
   }
 
   // Lógicas antigas que já funcionavam
+  document.getElementById('caExport').onclick = () => exportSingleFlow(n.id);
   document.getElementById('caEdit').onclick = ()=>openEditModal(n);
   document.getElementById('caFav').onclick = async ()=>{ n.favorite=!n.favorite; n.updatedAt=Date.now(); await dbPut(n); render(); };
   document.getElementById('caFlag').onclick = async ()=>{ n.isConclusion=!n.isConclusion; n.updatedAt=Date.now(); await dbPut(n); render(); };
@@ -930,7 +933,8 @@ async function openCardMenu(id, anchor){
   menu.innerHTML = `
     <button type="button" data-a="edit">${icon('edit')} Editar</button>
     <button type="button" data-a="fav">${icon('star')} ${node.favorite?'Remover favorito':'Favoritar'}</button>
-    <button type="button" data-a="flag">${icon('flag')} ${node.isConclusion?'Conclusão':'Conclusão?'}</button>
+    <button type="button" data-a="flag">${icon('flag')} ${node.isConclusion?'Desmarcar conclusão':'Marcar conclusão'}</button>
+    <button type="button" data-a="export">${icon('download')} Exportar Trilha</button>
     <button type="button" data-a="up">↑ Mover para cima</button>
     <button type="button" data-a="down">↓ Mover para baixo</button>
     <button type="button" data-a="del" class="popover-danger">${icon('trash')} Excluir</button>
@@ -956,6 +960,7 @@ async function openCardMenu(id, anchor){
     if(a==='edit') openEditModal(node);
     else if(a==='fav'){ node.favorite=!node.favorite; node.updatedAt=Date.now(); await dbPut(node); render(); }
     else if(a==='flag'){ node.isConclusion=!node.isConclusion; node.updatedAt=Date.now(); await dbPut(node); render(); }
+    else if(a==='export') exportSingleFlow(id); // <-- Adicione esta linha
     else if(a==='up') moveNode(id,'up');
     else if(a==='down') moveNode(id,'down');
     else if(a==='del'){
@@ -1521,6 +1526,72 @@ function openSettingsModal(){
   });
 }
 
+/* --------- Exportar Trilha Específica (Isolada) --------- */
+async function exportSingleFlow(startNodeId) {
+  closeCardMenu();
+  const progress = showProgress('Preparando exportação da trilha…');
+  try {
+    const nodesToExport = [];
+    const startNode = await dbGet(startNodeId);
+    if(!startNode) { progress.close(); return; }
+
+    // O nó inicial vira "ROOT" (Raiz) no arquivo exportado. 
+    // Assim, quem importar isso vai ver esse item direto na tela Início.
+    const rootClone = { ...startNode, parentId: ROOT };
+    nodesToExport.push(rootClone);
+
+    // Varre infinitamente pegando todos os filhos e ramificações desse nó
+    let queue = [startNodeId];
+    while(queue.length > 0) {
+      const next = [];
+      for(const pid of queue) {
+        const kids = await dbChildren(pid);
+        for(const k of kids) {
+          nodesToExport.push(k);
+          next.push(k.id);
+        }
+      }
+      queue = next;
+    }
+
+    const out = [];
+    for(let i=0; i<nodesToExport.length; i++){
+      const n = nodesToExport[i];
+      const item = {
+        id:n.id, parentId:n.parentId, type:n.type, title:n.title||'', text:n.text||'',
+        isConclusion:!!n.isConclusion, favorite:!!n.favorite, order:n.order,
+        createdAt:n.createdAt, updatedAt:n.updatedAt,
+        targetId: n.targetId || undefined,
+        isBudgetDone: !!n.isBudgetDone,
+        mediaMime: n.mediaMime || null, mediaDataUrl: null
+      };
+      if(n.mediaBlob){ item.mediaDataUrl = await blobToDataURL(n.mediaBlob); }
+      out.push(item);
+      if(i % 15 === 0) progress.update(`Exportando… ${i+1}/${nodesToExport.length}`);
+    }
+
+    const payload = { app:'trilha-notas', version:1, exportedAt:new Date().toISOString(), nodes:out };
+    const json = JSON.stringify(payload);
+    const blob = new Blob([json], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    
+    // Cria um nome de arquivo inteligente baseado no título do Fluxo
+    const stamp = new Date().toISOString().slice(0,10);
+    const safeName = (startNode.title || 'trilha').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    
+    a.href = url; a.download = `${safeName}-${stamp}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    progress.close();
+    toast(`Trilha exportada: ${out.length} etapa(s).`);
+  } catch(err) {
+    progress.close();
+    console.error(err);
+    toast('Erro ao exportar. Veja o console.');
+  }
+}
+
 /* --------- Exportar --------- */
 async function exportData(){
   closeModal();
@@ -1628,9 +1699,9 @@ function importModeDialog(n){
         </div>
         <div class="modal-actions"><button type="button" class="btn btn-ghost" id="imCancel">Cancelar</button></div>`,
       onMount:(body)=>{
-        body.querySelector('#imMerge').onclick = ()=>{ closeModal(); resolve('merge'); };
-        body.querySelector('#imReplace').onclick = ()=>{ closeModal(); resolve('replace'); };
-        body.querySelector('#imCancel').onclick = ()=>{ closeModal(); resolve('cancel'); };
+        body.querySelector('#imMerge').onclick = ()=>{ resolve('merge'); closeModal(); };
+        body.querySelector('#imReplace').onclick = ()=>{ resolve('replace'); closeModal(); };
+        body.querySelector('#imCancel').onclick = ()=>{ resolve('cancel'); closeModal(); };
       },
       onClose: ()=> resolve('cancel')
     });
