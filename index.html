@@ -391,6 +391,11 @@ body.modal-open{overflow:hidden;}
 .total-budget-box h4 { margin: 0 0 6px; font-size: 14px; color: var(--ink-soft); }
 .total-budget-box .val { font-size: 28px; font-weight: 700; font-family: var(--font-display); }
 .total-budget-box .sub { font-size: 13.5px; margin-top: 8px; font-weight: bold; opacity: 0.8; }
+#nodeList{
+    border-radius:3%;
+    overflow-y:auto;
+    max-height:244px;
+}
 </style>
 </head>
 <body>
@@ -415,7 +420,7 @@ body.modal-open{overflow:hidden;}
     <section id="nodeContent" class="node-content" hidden></section>
     <section class="node-children">
       <h2 id="childrenHeading" class="section-heading">Minhas trilhas</h2>
-      <div id="nodeList" class="node-list" style="border-radius: 3%;overflow-y: auto;max-height: 244px;"></div>
+      <div id="nodeList" class="node-list"></div>
       <p id="emptyState" class="empty-state" hidden></p>
     </section>
   </main>
@@ -849,20 +854,42 @@ async function renderContent(){
 }
 
 async function renderChildren(){
+
+  // Aumenta a lista apenas na tela inicial
+  if(currentNodeId === null){
+    elList.style.maxHeight = "65vh";
+  }else{
+    elList.style.maxHeight = "244px";
+  }
+
   const parentKey = currentNodeId===null ? ROOT : currentNodeId;
   const kids = await dbChildren(parentKey);
+
   kids.sort((a,b)=>(a.order||0)-(b.order||0));
+
   elList.innerHTML = '';
+
   if(!kids.length){
+
     elEmpty.hidden = false;
+
     elEmpty.textContent = currentNodeId===null
       ? 'Nenhuma trilha ainda. Toque em + para começar.'
       : 'Nenhum próximo passo ainda. Toque em + para continuar a trilha, ou marque esta etapa como conclusão.';
+
     return;
   }
+
   elEmpty.hidden = true;
-  const counts = await Promise.all(kids.map(k=>dbChildCount(k.id)));
-  kids.forEach((node,i)=> elList.appendChild(createCardEl(node, counts[i])));
+
+  const counts = await Promise.all(
+    kids.map(k => dbChildCount(k.id))
+  );
+
+  kids.forEach((node,i)=>
+    elList.appendChild(createCardEl(node, counts[i]))
+  );
+
 }
 
 function createCardEl(node, count){
