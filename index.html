@@ -396,6 +396,34 @@ body.modal-open{overflow:hidden;}
     overflow-y:auto;
     max-height:244px;
 }
+/* --- Estilos do Speedrun (LiveSplit Mode) --- */
+.speedrun-active { 
+  width: auto !important; padding: 0 12px !important; gap: 6px;
+  font-family: var(--font-mono); font-weight: bold; font-size: 14px;
+  animation: pulseSR 1.5s infinite; transition: all 0.3s ease;
+}
+.speedrun-active.sr-neutral { background: var(--audio-soft) !important; color: var(--audio) !important; box-shadow: 0 0 0 1px var(--audio) !important; }
+.speedrun-active.sr-ahead { background: var(--moss-soft) !important; color: var(--moss) !important; box-shadow: 0 0 0 1px var(--moss) !important; }
+.speedrun-active.sr-behind { background: var(--danger-soft) !important; color: var(--danger) !important; box-shadow: 0 0 0 1px var(--danger) !important; }
+
+@keyframes pulseSR { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
+.sr-list-wrap { 
+  max-height: 280px; overflow-y: auto; margin-top: 8px; 
+  border: 1px solid var(--line); border-radius: 8px; background: var(--paper); 
+}
+.sr-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.sr-item:last-child { border-bottom: none; }
+.sr-item-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 10px; }
+.sr-item-time { font-family: var(--font-mono); font-weight: bold; flex-shrink: 0; }
+
+/* Blocos de Diferença (Split) */
+.sr-diff { font-family: var(--font-mono); font-size: 15px; font-weight: bold; margin-top: 6px; display: inline-block; padding: 6px 12px; border-radius: 8px; }
+.sr-diff.ahead { background: #E1EEE6; color: #2F5D46; } /* Verde */
+.sr-diff.behind { background: #FBEAEA; color: #B23A3A; } /* Vermelho */
+
+/* Splits pequenos da Lista */
+.split-badge { padding: 3px 6px; font-size: 11px; border-radius: 5px; margin-left: 6px; font-weight: bold; font-family: var(--font-mono); min-width: 48px; text-align: center; }
+.split-badge.gold { background: #F5E9D2; color: #B8862B; box-shadow: 0 0 0 1px #E0B15C; } /* Ouro (Novo melhor tempo da etapa) */
 </style>
 </head>
 <body>
@@ -408,6 +436,9 @@ body.modal-open{overflow:hidden;}
       <span>Trilha</span>
     </div>
     <div class="topbar-actions">
+      <!-- NOVO BOTÃO DE SPEEDRUN -->
+      <button class="icon-btn" id="btnSpeedrun" title="Modo Speedrun" aria-label="Speedrun"></button>
+      
       <button class="icon-btn" id="btnSearch" title="Buscar" aria-label="Buscar"></button>
       <button class="icon-btn" id="btnLibrary" title="Biblioteca" aria-label="Biblioteca"></button>
       <button class="icon-btn" id="btnMenu" title="Menu" aria-label="Menu"></button>
@@ -477,6 +508,7 @@ const ICONS = {
   download:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg>`,
   close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>`,
   check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>`,
+  clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`,
 };
 ICONS.mic = ICONS.audio;
 function icon(name){ return ICONS[name] || ''; }
@@ -638,6 +670,16 @@ async function buildPath(node){
 
 async function goTo(nodeId){
   if(nodeId === '' ) nodeId = null;
+
+  // --- MÁGICA DO SPEEDRUN: Marca o tempo gasto na etapa que você acabou de ler ---
+  if(typeof srActive !== 'undefined' && srActive){
+    const tempoGasto = Math.floor((Date.now() - srNodeStart) / 1000);
+    const tituloPasso = currentNode ? displayTitle(currentNode) : 'Início';
+    if (tempoGasto > 0) srHistory.push({ title: tituloPasso, time: tempoGasto });
+    srNodeStart = Date.now(); // Zera o relógio interno para o próximo passo
+  }
+  // -------------------------------------------------------------------------------
+
   if(nodeId === null){
     currentNodeId = null; currentNode = null; breadcrumbPath = [];
   } else {
@@ -2022,6 +2064,210 @@ fabMenu.querySelectorAll('button[data-action]').forEach(btn => {
     }
   };
 });
+
+/* =======================================================================
+   MODO SPEEDRUN (LiveSplit / Treinamento Rápido)
+======================================================================= */
+let srActive = false;
+let srRootId = null;
+let srHistory = [];
+let srNodeStart = 0;
+let srTimer = null;
+let srTotalSeconds = 0;
+let srCurrentRecord = null; // PB
+let srSoB = 0; // Sum of Best
+
+const btnSpeedrun = document.getElementById('btnSpeedrun');
+btnSpeedrun.innerHTML = icon('clock');
+
+function formatSRTime(sec) {
+  const m = Math.floor(sec / 60).toString().padStart(2, '0');
+  const s = (sec % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+btnSpeedrun.onclick = async () => {
+  // === INICIAR SPEEDRUN ===
+  if (!srActive) {
+    if (currentNodeId === null || breadcrumbPath.length === 0) {
+      toast('Entre em um fluxo primeiro para iniciar o tempo.');
+      return;
+    }
+    
+    srRootId = breadcrumbPath[0].id; 
+    
+    // Busca banco de dados de Speedrun deste Fluxo
+    const rootNode = await dbGet(srRootId);
+    srCurrentRecord = rootNode.speedrunRecord || null;
+    const bestSegments = rootNode.bestSegments || {};
+    const pbRoute = rootNode.pbRoute || [];
+    
+    // Calcula o Sum of Best (SoB) baseado na rota do Recorde!
+    srSoB = 0;
+    if (pbRoute.length > 0) {
+      srSoB = pbRoute.reduce((sum, title) => sum + (bestSegments[title] || 0), 0);
+    }
+    
+    srActive = true;
+    srHistory = [];
+    srNodeStart = Date.now();
+    srTotalSeconds = 0;
+
+    btnSpeedrun.classList.add('speedrun-active');
+    btnSpeedrun.classList.remove('sr-ahead', 'sr-behind', 'sr-neutral');
+    
+    let recordDisplay = '';
+    if (srCurrentRecord) {
+      btnSpeedrun.classList.add('sr-ahead');
+      recordDisplay = `<span style="font-size:10px; opacity:0.85; font-weight:normal; margin-left:6px; border-left:1px solid currentColor; padding-left:6px; line-height:1.2;">
+        PB: ${formatSRTime(srCurrentRecord)}<br>SoB: ${formatSRTime(srSoB)}
+      </span>`;
+    } else {
+      btnSpeedrun.classList.add('sr-neutral');
+    }
+
+    btnSpeedrun.innerHTML = `<div style="display:flex; align-items:center;">${icon('clock')} <span id="srClockText" style="margin-left:4px; font-size:16px;">00:00</span> ${recordDisplay}</div>`;
+
+    srTimer = setInterval(() => {
+      srTotalSeconds++;
+      const t = document.getElementById('srClockText');
+      if (t) t.textContent = formatSRTime(srTotalSeconds);
+      
+      if (srCurrentRecord) {
+        if (srTotalSeconds > srCurrentRecord && btnSpeedrun.classList.contains('sr-ahead')) {
+          btnSpeedrun.classList.remove('sr-ahead');
+          btnSpeedrun.classList.add('sr-behind');
+        }
+      }
+    }, 1000);
+    
+    toast('🚀 Speedrun Iniciado! Valendo!');
+  } 
+  // === FINALIZAR E COMPARAR (MODAL) ===
+  else {
+    clearInterval(srTimer);
+    srActive = false;
+    
+    btnSpeedrun.classList.remove('speedrun-active', 'sr-ahead', 'sr-behind', 'sr-neutral');
+    btnSpeedrun.innerHTML = icon('clock');
+
+    const tempoGasto = Math.floor((Date.now() - srNodeStart) / 1000);
+    const tituloPasso = currentNode ? displayTitle(currentNode) : 'Fim do Fluxo';
+    if (tempoGasto > 0) srHistory.push({ title: tituloPasso, time: tempoGasto });
+
+    const totalTempo = srHistory.reduce((acc, curr) => acc + curr.time, 0);
+
+    const rootNode = await dbGet(srRootId);
+    let recordTime = rootNode.speedrunRecord || null;
+    let bestSegments = rootNode.bestSegments || {};
+    let recordMsg = '';
+    let diffHtml = '';
+    let isNewRecord = false;
+    
+    // 1. ANÁLISE ETAPA POR ETAPA (Golds e Red Splits)
+    let htmlList = '';
+    srHistory.forEach(h => {
+      const previousBest = bestSegments[h.title];
+      let diffBadge = '';
+      let timeColor = 'var(--ink)';
+      let prevText = '';
+
+      if (!previousBest) {
+        bestSegments[h.title] = h.time;
+        diffBadge = `<span class="split-badge gold">Ouro!</span>`;
+        timeColor = 'var(--moss)';
+      } else {
+        const diff = h.time - previousBest;
+        prevText = `<span style="font-size:11px; color:var(--ink-soft); margin-right:8px;">Ant: ${formatSRTime(previousBest)}</span>`;
+        
+        if (diff < 0) {
+          bestSegments[h.title] = h.time; // Bateu o tempo da etapa (Gold Split!)
+          diffBadge = `<span class="split-badge ahead">-${formatSRTime(Math.abs(diff))}</span>`;
+          timeColor = 'var(--moss)';
+        } else if (diff > 0) {
+          diffBadge = `<span class="split-badge behind">+${formatSRTime(diff)}</span>`;
+          timeColor = 'var(--danger)';
+        } else {
+          diffBadge = `<span class="split-badge" style="background:var(--paper); border:1px solid var(--line); color:var(--ink-soft);">=</span>`;
+        }
+      }
+      
+      htmlList += `
+        <div class="sr-item">
+          <span class="sr-item-title" title="${escapeHTML(h.title)}">${escapeHTML(h.title)}</span>
+          <div style="display:flex; align-items:center; flex-shrink:0;">
+            ${prevText}
+            <span class="sr-item-time" style="color:${timeColor}">${formatSRTime(h.time)}</span>
+            ${diffBadge}
+          </div>
+        </div>
+      `;
+    });
+
+    // 2. ANÁLISE GERAL DO RECORDE (PB)
+    if (!recordTime || totalTempo < recordTime) {
+      rootNode.speedrunRecord = totalTempo;
+      rootNode.pbRoute = srHistory.map(h => h.title); // Salva a rota vitoriosa para o próximo SoB!
+      isNewRecord = true;
+      if (!recordTime) {
+        recordMsg = 'Tempo Base Registrado.';
+      } else {
+        recordMsg = `🎉 NOVO RECORDE! (O anterior era ${formatSRTime(recordTime)})`;
+        diffHtml = `<div class="sr-diff ahead">↓ -${formatSRTime(Math.abs(totalTempo - recordTime))} mais rápido!</div>`;
+      }
+    } else {
+      const diff = totalTempo - recordTime;
+      if (totalTempo > recordTime) {
+        recordMsg = `O Recorde (PB) continua sendo ${formatSRTime(recordTime)}`;
+        diffHtml = `<div class="sr-diff behind">↑ +${formatSRTime(diff)} mais lento</div>`;
+      } else {
+        recordMsg = `Empatou com o recorde de ${formatSRTime(recordTime)}!`;
+        diffHtml = `<div class="sr-diff" style="background:var(--paper); border:1px solid var(--line);">Empate cravado</div>`;
+      }
+    }
+
+    // Salva tudo no banco
+    rootNode.bestSegments = bestSegments;
+    await dbPut(rootNode);
+
+    openModal({
+      title: 'Resultados (LiveSplit Mode)',
+      bodyHTML: `
+        <div class="total-budget-box" style="padding:16px; background: ${isNewRecord ? 'var(--moss-soft)' : 'var(--paper-raised)'}; border: 1px solid ${isNewRecord ? 'var(--moss)' : 'var(--line)'};">
+          <h4 style="margin:0 0 6px; font-size:12px; text-transform:uppercase; color: ${isNewRecord ? 'var(--moss)' : 'var(--ink-soft)'};">SEU TEMPO FINAL</h4>
+          <div class="val" style="font-size:36px; color: ${isNewRecord ? 'var(--moss)' : 'var(--ink)'};">${formatSRTime(totalTempo)}</div>
+          ${diffHtml}
+          <div class="sub" style="font-size:12px; margin-top:10px;">${recordMsg}</div>
+        </div>
+        <div style="margin-top:18px;">
+          <span style="font-size:11.5px; font-weight:bold; color:var(--ink-soft);">ANÁLISE DE ETAPAS:</span>
+          <div class="sr-list-wrap">${htmlList || '<p class="hint" style="padding:10px;">Nenhum passo registrado.</p>'}</div>
+        </div>
+        <div class="modal-actions" style="margin-top:20px; justify-content:space-between;">
+          <button type="button" class="btn btn-ghost btn-danger" id="bResetSR">${icon('trash')} Apagar Histórico</button>
+          <button type="button" class="btn btn-primary" id="bOkSR">Fechar</button>
+        </div>
+      `,
+      onMount: (body) => {
+        body.querySelector('#bOkSR').onclick = closeModal;
+        body.querySelector('#bResetSR').onclick = async () => {
+          const ok = await confirmDialog('Apagar TODOS os tempos (Recorde e Ouros) deste diagnóstico?', 'Sim, apagar', true);
+          if(ok) {
+            const rootToUpdate = await dbGet(srRootId);
+            if (rootToUpdate) {
+              delete rootToUpdate.speedrunRecord;
+              delete rootToUpdate.bestSegments;
+              delete rootToUpdate.pbRoute;
+              await dbPut(rootToUpdate);
+            }
+            closeModal();
+            toast('Histórico de Speedrun apagado com sucesso.');
+          }
+        };
+      }
+    });
+  }
+};
 
 /* =======================================================================
    INÍCIO DO APP
