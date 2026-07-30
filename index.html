@@ -1570,6 +1570,10 @@ function openSettingsModal(){
     title:'Menu',
     bodyHTML:`
       <div class="settings-list">
+        <button type="button" class="settings-item" id="stFinance">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;flex-shrink:0;color:var(--moss);"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+          <span>Configurações Financeiras</span>
+        </button>
         <button type="button" class="settings-item" id="stExport">${icon('download')} <span>Exportar dados (.json)</span></button>
         <button type="button" class="settings-item" id="stImport">${icon('upload')} <span>Importar dados (.json)</span></button>
         <button type="button" class="settings-item" id="stTheme">🌓 <span>Alternar tema claro/escuro</span></button>
@@ -1578,6 +1582,37 @@ function openSettingsModal(){
       <p class="hint" style="margin-top:14px;">Total de itens salvos: <strong id="stCount">…</strong></p>`,
     onMount: async (body)=>{
       countAll().then(c=>{ const el = body.querySelector('#stCount'); if(el) el.textContent = c; });
+      
+      // NOVA TELA DO FINANCEIRO
+      body.querySelector('#stFinance').onclick = () => {
+        closeModal();
+        openModal({
+          title: 'Financeiro',
+          bodyHTML: `
+            <label class="field"><span>Valor da Mão de Obra (R$ por Hora)</span>
+              <input type="number" id="fValorHora" value="${VALOR_HORA}" step="0.01">
+            </label>
+            <p class="hint">Este valor será usado para converter o tempo do cronômetro (Speedrun) e as anotações de tempo (ex: 30m, 2h) em Reais (R$) no seu orçamento.</p>
+            <div class="modal-actions" style="margin-top:20px;">
+              <button type="button" class="btn btn-ghost" id="fCancel">Cancelar</button>
+              <button type="button" class="btn btn-primary" id="fSave">${icon('check')} Salvar</button>
+            </div>
+          `,
+          onMount: (b) => {
+            b.querySelector('#fCancel').onclick = closeModal;
+            b.querySelector('#fSave').onclick = () => {
+              const v = parseFloat(b.querySelector('#fValorHora').value);
+              if(!isNaN(v) && v >= 0) {
+                VALOR_HORA = v;
+                localStorage.setItem('trilha-valor-hora', v);
+                toast('Valor da hora atualizado!');
+              }
+              closeModal();
+            };
+          }
+        });
+      };
+
       body.querySelector('#stExport').onclick = exportData;
       body.querySelector('#stImport').onclick = ()=>{ closeModal(); fileImportEl.click(); };
       body.querySelector('#stTheme').onclick = toggleTheme;
@@ -1815,15 +1850,36 @@ fabMenu.addEventListener('click', e=> e.stopPropagation());
    LÓGICA DE ORÇAMENTO E FAB (BOTÃO FLUTUANTE)
 ======================================================================= */
 
+// === CONFIGURAÇÃO DA OFICINA ===
+// Agora ele busca o valor salvo; se for a primeira vez, usa R$ 120,00
+let VALOR_HORA = parseFloat(localStorage.getItem('trilha-valor-hora')) || 120;
+
 function extractValue(text) {
   if(!text) return 0;
-  let match = text.match(/R\$\s*(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/i);
-  if(!match) match = text.match(/\b(\d{1,3}(?:\.\d{3})*,\d{2})\b/);
-  if(match) {
-    const numStr = match[1].replace(/\./g, '').replace(',', '.');
-    return parseFloat(numStr) || 0;
+  let total = 0;
+  
+  // 1. Procura dinheiro na anotação (ex: R$ 150,00)
+  let matchMoney = text.match(/R\$\s*(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/i);
+  if(!matchMoney) matchMoney = text.match(/\b(\d{1,3}(?:\.\d{3})*,\d{2})\b/);
+  if(matchMoney) {
+    const numStr = matchMoney[1].replace(/\./g, '').replace(',', '.');
+    total += parseFloat(numStr) || 0;
   }
-  return 0;
+  
+  // 2. Procura tempo de mão de obra (ex: 30m, 2h, 1.5h, 90min)
+  const regexTime = /\b(\d+(?:[.,]\d+)?)\s*(h|m|min|hora|horas)\b/gi;
+  let matchTime;
+  while ((matchTime = regexTime.exec(text)) !== null) {
+    const num = parseFloat(matchTime[1].replace(',', '.'));
+    const unit = matchTime[2].toLowerCase();
+    
+    if (unit === 'h' || unit.startsWith('hora')) {
+      total += num * VALOR_HORA;
+    } else if (unit === 'm' || unit.startsWith('min')) {
+      total += (num / 60) * VALOR_HORA;
+    }
+  }
+  return total;
 }
 
 async function getFlowNodes() {
@@ -1863,6 +1919,7 @@ async function getRouteNodes() {
 }
 
 // 3. Lógica Dinâmica do Botão Verde
+// 3. Lógica Dinâmica do Botão Verde
 fab.onclick = async (e) => {
   e.stopPropagation();
   
@@ -1870,23 +1927,24 @@ fab.onclick = async (e) => {
     let hasCheckedGlobally = false;
     let hasBudgetInRoute = false;
     
-    // Caça TUDO que está marcado no APP INTEIRO (Carrinho atual do cliente)
     await dbCursorAll(n => {
       if (n.isBudgetDone) hasCheckedGlobally = true;
     });
     
-    // Lê os valores APENAS da rota onde você está
     const routeNodes = await getRouteNodes();
     routeNodes.forEach(n => {
-      if (Math.max(extractValue(n.title), extractValue(n.text)) > 0) hasBudgetInRoute = true;
+      // Junta título e texto para garantir que ele acha o tempo/dinheiro
+      if (extractValue(n.title + ' ' + (n.text || '')) > 0) hasBudgetInRoute = true;
     });
+
+    // MÁGICA: Se o relógio estiver rodando, ele libera o botão Gerar Orçamento automaticamente!
+    const isTimerRunning = (typeof srActive !== 'undefined' && srActive && srTotalSeconds > 0);
 
     const btnCalc = fabMenu.querySelector('[data-action="calc-budget"]');
     const btnReset = fabMenu.querySelector('[data-action="reset-budget"]');
     const hrDivider = fabMenu.querySelector('hr');
     
-    // Mostra o botão Calcular se houver algo checado no app OU algum valor na rota atual
-    if (currentNodeId !== null && (hasBudgetInRoute || hasCheckedGlobally)) {
+    if ((currentNodeId !== null && (hasBudgetInRoute || hasCheckedGlobally)) || isTimerRunning) {
       btnCalc.style.display = 'flex';
     } else {
       btnCalc.style.display = 'none';
@@ -1898,7 +1956,7 @@ fab.onclick = async (e) => {
       btnReset.style.display = 'none';
     }
     
-    if ((currentNodeId !== null && (hasBudgetInRoute || hasCheckedGlobally)) || hasCheckedGlobally) {
+    if (btnCalc.style.display === 'flex' || btnReset.style.display === 'flex') {
       hrDivider.style.display = 'block';
     } else {
       hrDivider.style.display = 'none';
@@ -1937,17 +1995,22 @@ fabMenu.querySelectorAll('button[data-action]').forEach(btn => {
     else if(action==='add-library') openLibraryModal({insertMode:true});
     
     // === GERAR ORÇAMENTO (REAL GLOBAL + ESTIMADO DA ROTA) ===
+    
+    // === GERAR ORÇAMENTO (REAL GLOBAL + ESTIMADO DA ROTA + CRONÔMETRO) ===
     else if(action==='calc-budget') {
       const routeNodes = await getRouteNodes();
       const formata = (v) => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits:2});
       
-      // PARTE 1: O que já foi executado (Buscando no banco de dados INTEIRO)
+      // Função unificada que soma valores do título E do texto juntos
+      const getVal = (n) => extractValue(n.title + ' ' + (n.text || ''));
+      
       let totalExecutado = 0;
       let executedItems = [];
       
+      // 1. O que já foi executado nas caixinhas do App
       await dbCursorAll(n => {
         if (n.isBudgetDone) {
-          const val = Math.max(extractValue(n.title), extractValue(n.text));
+          const val = getVal(n);
           if (val > 0) {
             totalExecutado += val;
             executedItems.push(`• [x] ${displayTitle(n)} - ${formata(val)}`);
@@ -1955,12 +2018,21 @@ fabMenu.querySelectorAll('button[data-action]').forEach(btn => {
         }
       });
 
-      // PARTE 2: O caminho atual (Estimativa daquilo que NÃO está marcado)
+      // 1.5. AVALIAÇÃO DO CRONÔMETRO AO VIVO!
+      if (typeof srActive !== 'undefined' && srActive && srTotalSeconds > 0) {
+        const liveLabor = (srTotalSeconds / 3600) * VALOR_HORA;
+        if (liveLabor > 0) {
+          totalExecutado += liveLabor;
+          executedItems.push(`• [x] ⏱️ Mão de Obra de Diagnóstico (${formatSRTime(srTotalSeconds)}) - ${formata(liveLabor)}`);
+        }
+      }
+
+      // 2. O caminho atual (Estimativa)
       let totalEstimado = 0;
       let routeItems = [];
       
       routeNodes.forEach(n => {
-        const val = Math.max(extractValue(n.title), extractValue(n.text));
+        const val = getVal(n);
         let valStr = val > 0 ? ` - ${formata(val)}` : '';
         let prefix = '';
         
@@ -1976,7 +2048,7 @@ fabMenu.querySelectorAll('button[data-action]').forEach(btn => {
 
       let totalGeral = totalExecutado + totalEstimado;
 
-      // Montando o texto para copiar
+      // Montando o texto final
       let finalCopyText = 'RESUMO DO DIAGNÓSTICO:\n\n';
       
       if (executedItems.length > 0) {
@@ -2016,13 +2088,12 @@ fabMenu.querySelectorAll('button[data-action]').forEach(btn => {
             <div class="content-text" style="padding: 12px; margin-top: 6px; font-size: 13px; max-height: 250px; overflow-y: auto; white-space: pre-wrap;">${escapeHTML(finalCopyText)}</div>
           </div>
 
-          <div class="modal-actions" style="margin-top:20px;">
-            <button type="button" class="btn btn-primary" id="bOk">Fechar</button>
+          <div class="modal-actions" style="margin-top:20px; justify-content: space-between;">
             <button type="button" class="btn btn-ghost" id="bCopyRoute">${icon('text')} Copiar</button>
+            <button type="button" class="btn btn-primary" id="bOk">Fechar</button>
           </div>`,
         onMount: (body) => {
           body.querySelector('#bOk').onclick = closeModal;
-          
           const copyBtn = body.querySelector('#bCopyRoute');
           copyBtn.onclick = async () => {
             try {
@@ -2030,13 +2101,8 @@ fabMenu.querySelectorAll('button[data-action]').forEach(btn => {
               const originalHTML = copyBtn.innerHTML;
               copyBtn.innerHTML = `${icon('check')} Copiado!`;
               copyBtn.style.color = 'var(--moss)';
-              setTimeout(() => {
-                copyBtn.innerHTML = originalHTML;
-                copyBtn.style.color = '';
-              }, 2000);
-            } catch(e) {
-              toast('Erro ao copiar.');
-            }
+              setTimeout(() => { copyBtn.innerHTML = originalHTML; copyBtn.style.color = ''; }, 2000);
+            } catch(e) { toast('Erro ao copiar.'); }
           };
         }
       });
@@ -2081,8 +2147,10 @@ const btnSpeedrun = document.getElementById('btnSpeedrun');
 btnSpeedrun.innerHTML = icon('clock');
 
 function formatSRTime(sec) {
-  const m = Math.floor(sec / 60).toString().padStart(2, '0');
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60).toString().padStart(2, '0');
   const s = (sec % 60).toString().padStart(2, '0');
+  if (h > 0) return `${h}:${m}:${s}`;
   return `${m}:${s}`;
 }
 
@@ -2095,14 +2163,11 @@ btnSpeedrun.onclick = async () => {
     }
     
     srRootId = breadcrumbPath[0].id; 
-    
-    // Busca banco de dados de Speedrun deste Fluxo
     const rootNode = await dbGet(srRootId);
     srCurrentRecord = rootNode.speedrunRecord || null;
     const bestSegments = rootNode.bestSegments || {};
     const pbRoute = rootNode.pbRoute || [];
     
-    // Calcula o Sum of Best (SoB) baseado na rota do Recorde!
     srSoB = 0;
     if (pbRoute.length > 0) {
       srSoB = pbRoute.reduce((sum, title) => sum + (bestSegments[title] || 0), 0);
@@ -2119,17 +2184,23 @@ btnSpeedrun.onclick = async () => {
     let recordDisplay = '';
     if (srCurrentRecord) {
       btnSpeedrun.classList.add('sr-ahead');
-      recordDisplay = `<span style="font-size:10px; opacity:0.85; font-weight:normal; margin-left:6px; border-left:1px solid currentColor; padding-left:6px; line-height:1.2;">
-        PB: ${formatSRTime(srCurrentRecord)}<br>SoB: ${formatSRTime(srSoB)}
+      // Reduzimos o tamanho e o espaçamento para caber as horas sem estourar a tela do celular
+      recordDisplay = `<span style="font-size:9.5px; opacity:0.85; font-weight:normal; margin-left:4px; border-left:1px solid currentColor; padding-left:4px; line-height:1.2;">
+        PB:${formatSRTime(srCurrentRecord)}<br>SB:${formatSRTime(srSoB)}
       </span>`;
     } else {
       btnSpeedrun.classList.add('sr-neutral');
     }
 
-    btnSpeedrun.innerHTML = `<div style="display:flex; align-items:center;">${icon('clock')} <span id="srClockText" style="margin-left:4px; font-size:16px;">00:00</span> ${recordDisplay}</div>`;
+    // A fonte do relógio foi para 14px e compactada (letter-spacing)
+    btnSpeedrun.innerHTML = `<div style="display:flex; align-items:center;">${icon('clock')} <span id="srClockText" style="margin-left:4px; font-size:14px; letter-spacing:-0.5px;">00:00</span> ${recordDisplay}</div>`;
 
     srTimer = setInterval(() => {
-      srTotalSeconds++;
+      // A MÁGICA CONTRA BLOQUEIO DE TELA: Em vez de somar +1, ele lê o relógio do sistema!
+      const pastTime = srHistory.reduce((acc, curr) => acc + curr.time, 0);
+      const currentStepTime = Math.floor((Date.now() - srNodeStart) / 1000);
+      srTotalSeconds = pastTime + currentStepTime;
+      
       const t = document.getElementById('srClockText');
       if (t) t.textContent = formatSRTime(srTotalSeconds);
       
