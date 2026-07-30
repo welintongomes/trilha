@@ -2011,7 +2011,7 @@ fabMenu.querySelectorAll('button[data-action]').forEach(btn => {
     // === GERAR ORÇAMENTO (REAL GLOBAL + ESTIMADO DA ROTA + CRONÔMETRO) ===
     else if(action==='calc-budget') {
       const routeNodes = await getRouteNodes();
-      const formata = (v) => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits:2});
+      const formata = (v) => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
       
       // Função unificada que soma valores do título E do texto juntos
       const getVal = (n) => extractValue(n.title + ' ' + (n.text || ''));
