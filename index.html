@@ -672,11 +672,23 @@ async function goTo(nodeId){
   if(nodeId === '' ) nodeId = null;
 
   // --- MÁGICA DO SPEEDRUN: Marca o tempo gasto na etapa que você acabou de ler ---
+  // --- MÁGICA DO SPEEDRUN ---
   if(typeof srActive !== 'undefined' && srActive){
-    const tempoGasto = Math.floor((Date.now() - srNodeStart) / 1000);
+    let tempoGasto = 0;
+    if (typeof srPaused !== 'undefined' && srPaused) {
+      // Se estiver pausado, salva só o que tinha acumulado antes do pause
+      tempoGasto = srStepAccumulated;
+    } else {
+      // Se estiver rodando, soma o acumulado com os segundos que passaram até agora
+      tempoGasto = srStepAccumulated + Math.floor((Date.now() - srNodeStart) / 1000);
+    }
+    
     const tituloPasso = currentNode ? displayTitle(currentNode) : 'Início';
     if (tempoGasto > 0) srHistory.push({ title: tituloPasso, time: tempoGasto });
-    srNodeStart = Date.now(); // Zera o relógio interno para o próximo passo
+    
+    // Zera os contadores da etapa e reinicia o relógio da nova etapa
+    srStepAccumulated = 0;
+    if (!srPaused) srNodeStart = Date.now();
   }
   // -------------------------------------------------------------------------------
 
@@ -2132,9 +2144,11 @@ fabMenu.querySelectorAll('button[data-action]').forEach(btn => {
 });
 
 /* =======================================================================
-   MODO SPEEDRUN (LiveSplit / Treinamento Rápido)
+   MODO SPEEDRUN (LiveSplit / Treinamento Rápido + Pause)
 ======================================================================= */
 let srActive = false;
+let srPaused = false;
+let srStepAccumulated = 0; // Guarda os segundos quando você pausa no meio de uma etapa
 let srRootId = null;
 let srHistory = [];
 let srNodeStart = 0;
@@ -2154,8 +2168,178 @@ function formatSRTime(sec) {
   return `${m}:${s}`;
 }
 
+// Atualiza a cor e o visual do botão no topo
+function updateSrVisuals() {
+  btnSpeedrun.classList.remove('sr-ahead', 'sr-behind', 'sr-neutral');
+  btnSpeedrun.style.background = ''; btnSpeedrun.style.color = ''; btnSpeedrun.style.boxShadow = ''; btnSpeedrun.style.animation = '';
+  
+  if (srPaused) {
+    btnSpeedrun.style.background = 'var(--amber-soft)';
+    btnSpeedrun.style.color = 'var(--amber)';
+    btnSpeedrun.style.boxShadow = '0 0 0 1px var(--amber)';
+    btnSpeedrun.style.animation = 'pulseSR 2s infinite'; // Pulso mais lento no pause
+    btnSpeedrun.innerHTML = `<div style="display:flex; align-items:center;">⏸️ <span style="margin-left:4px; font-size:14px; letter-spacing:-0.5px;">${formatSRTime(srTotalSeconds)} (Pausa)</span></div>`;
+    return;
+  }
+
+  let recordDisplay = '';
+  if (srCurrentRecord) {
+    btnSpeedrun.classList.add(srTotalSeconds <= srCurrentRecord ? 'sr-ahead' : 'sr-behind');
+    recordDisplay = `<span style="font-size:9.5px; opacity:0.85; font-weight:normal; margin-left:4px; border-left:1px solid currentColor; padding-left:4px; line-height:1.2;">PB:${formatSRTime(srCurrentRecord)}<br>SB:${formatSRTime(srSoB)}</span>`;
+  } else {
+    btnSpeedrun.classList.add('sr-neutral');
+  }
+
+  btnSpeedrun.innerHTML = `<div style="display:flex; align-items:center;">${icon('clock')} <span id="srClockText" style="margin-left:4px; font-size:14px; letter-spacing:-0.5px;">${formatSRTime(srTotalSeconds)}</span> ${recordDisplay}</div>`;
+}
+
+// Liga/Desliga o motor do relógio 
+function startSrInterval() {
+  updateSrVisuals();
+  srTimer = setInterval(() => {
+    const pastTime = srHistory.reduce((acc, curr) => acc + curr.time, 0);
+    const currentStepTime = srStepAccumulated + Math.floor((Date.now() - srNodeStart) / 1000);
+    srTotalSeconds = pastTime + currentStepTime;
+    
+    const t = document.getElementById('srClockText');
+    if (t) t.textContent = formatSRTime(srTotalSeconds);
+    
+    if (srCurrentRecord) {
+      if (srTotalSeconds > srCurrentRecord && btnSpeedrun.classList.contains('sr-ahead')) {
+        btnSpeedrun.classList.remove('sr-ahead');
+        btnSpeedrun.classList.add('sr-behind');
+      }
+    }
+  }, 1000);
+}
+
+// Lógica de finalização (calcula ouros, penalidades, PB e SoB)
+async function finishSpeedrunAction() {
+  const tempoGasto = srPaused ? srStepAccumulated : (srStepAccumulated + Math.floor((Date.now() - srNodeStart) / 1000));
+  const tituloPasso = currentNode ? displayTitle(currentNode) : 'Fim do Fluxo';
+  if (tempoGasto > 0) srHistory.push({ title: tituloPasso, time: tempoGasto });
+
+  clearInterval(srTimer);
+  srActive = false; srPaused = false; srStepAccumulated = 0;
+  
+  btnSpeedrun.classList.remove('speedrun-active', 'sr-ahead', 'sr-behind', 'sr-neutral');
+  btnSpeedrun.style.background = ''; btnSpeedrun.style.color = ''; btnSpeedrun.style.boxShadow = ''; btnSpeedrun.style.animation = '';
+  btnSpeedrun.innerHTML = icon('clock');
+
+  const totalTempo = srHistory.reduce((acc, curr) => acc + curr.time, 0);
+  const rootNode = await dbGet(srRootId);
+  
+  let recordTime = rootNode.speedrunRecord || null;
+  let bestSegments = rootNode.bestSegments || {};
+  let recordMsg = '';
+  let diffHtml = '';
+  let isNewRecord = false;
+  
+  // 1. ANÁLISE ETAPA POR ETAPA
+  let htmlList = '';
+  srHistory.forEach(h => {
+    const previousBest = bestSegments[h.title];
+    let diffBadge = '';
+    let timeColor = 'var(--ink)';
+    let prevText = '';
+
+    if (!previousBest) {
+      bestSegments[h.title] = h.time;
+      diffBadge = `<span class="split-badge gold">Ouro!</span>`;
+      timeColor = 'var(--moss)';
+    } else {
+      const diff = h.time - previousBest;
+      prevText = `<span style="font-size:11px; color:var(--ink-soft); margin-right:8px;">Ant: ${formatSRTime(previousBest)}</span>`;
+      
+      if (diff < 0) {
+        bestSegments[h.title] = h.time;
+        diffBadge = `<span class="split-badge ahead">-${formatSRTime(Math.abs(diff))}</span>`;
+        timeColor = 'var(--moss)';
+      } else if (diff > 0) {
+        diffBadge = `<span class="split-badge behind">+${formatSRTime(diff)}</span>`;
+        timeColor = 'var(--danger)';
+      } else {
+        diffBadge = `<span class="split-badge" style="background:var(--paper); border:1px solid var(--line); color:var(--ink-soft);">=</span>`;
+      }
+    }
+    
+    htmlList += `
+      <div class="sr-item">
+        <span class="sr-item-title" title="${escapeHTML(h.title)}">${escapeHTML(h.title)}</span>
+        <div style="display:flex; align-items:center; flex-shrink:0;">
+          ${prevText}
+          <span class="sr-item-time" style="color:${timeColor}">${formatSRTime(h.time)}</span>
+          ${diffBadge}
+        </div>
+      </div>
+    `;
+  });
+
+  // 2. ANÁLISE GERAL DO RECORDE (PB)
+  if (!recordTime || totalTempo < recordTime) {
+    rootNode.speedrunRecord = totalTempo;
+    rootNode.pbRoute = srHistory.map(h => h.title);
+    isNewRecord = true;
+    if (!recordTime) {
+      recordMsg = 'Tempo Base Registrado.';
+    } else {
+      recordMsg = `🎉 NOVO RECORDE! (O anterior era ${formatSRTime(recordTime)})`;
+      diffHtml = `<div class="sr-diff ahead">↓ -${formatSRTime(Math.abs(totalTempo - recordTime))} mais rápido!</div>`;
+    }
+  } else {
+    const diff = totalTempo - recordTime;
+    if (totalTempo > recordTime) {
+      recordMsg = `O Recorde (PB) continua sendo ${formatSRTime(recordTime)}`;
+      diffHtml = `<div class="sr-diff behind">↑ +${formatSRTime(diff)} mais lento</div>`;
+    } else {
+      recordMsg = `Empatou com o recorde de ${formatSRTime(recordTime)}!`;
+      diffHtml = `<div class="sr-diff" style="background:var(--paper); border:1px solid var(--line);">Empate cravado</div>`;
+    }
+  }
+
+  rootNode.bestSegments = bestSegments;
+  await dbPut(rootNode);
+
+  openModal({
+    title: 'Resultados (LiveSplit Mode)',
+    bodyHTML: `
+      <div class="total-budget-box" style="padding:16px; background: ${isNewRecord ? 'var(--moss-soft)' : 'var(--paper-raised)'}; border: 1px solid ${isNewRecord ? 'var(--moss)' : 'var(--line)'};">
+        <h4 style="margin:0 0 6px; font-size:12px; text-transform:uppercase; color: ${isNewRecord ? 'var(--moss)' : 'var(--ink-soft)'};">SEU TEMPO FINAL</h4>
+        <div class="val" style="font-size:36px; color: ${isNewRecord ? 'var(--moss)' : 'var(--ink)'};">${formatSRTime(totalTempo)}</div>
+        ${diffHtml}
+        <div class="sub" style="font-size:12px; margin-top:10px;">${recordMsg}</div>
+      </div>
+      <div style="margin-top:18px;">
+        <span style="font-size:11.5px; font-weight:bold; color:var(--ink-soft);">ANÁLISE DE ETAPAS:</span>
+        <div class="sr-list-wrap">${htmlList || '<p class="hint" style="padding:10px;">Nenhum passo registrado.</p>'}</div>
+      </div>
+      <div class="modal-actions" style="margin-top:20px; justify-content:space-between;">
+        <button type="button" class="btn btn-ghost btn-danger" id="bResetSR">${icon('trash')} Apagar Histórico</button>
+        <button type="button" class="btn btn-primary" id="bOkSR">Fechar</button>
+      </div>
+    `,
+    onMount: (body) => {
+      body.querySelector('#bOkSR').onclick = closeModal;
+      body.querySelector('#bResetSR').onclick = async () => {
+        const ok = await confirmDialog('Apagar TODOS os tempos (Recorde e Ouros) deste diagnóstico?', 'Sim, apagar', true);
+        if(ok) {
+          const rootToUpdate = await dbGet(srRootId);
+          if (rootToUpdate) {
+            delete rootToUpdate.speedrunRecord;
+            delete rootToUpdate.bestSegments;
+            delete rootToUpdate.pbRoute;
+            await dbPut(rootToUpdate);
+          }
+          closeModal();
+          toast('Histórico de Speedrun apagado com sucesso.');
+        }
+      };
+    }
+  });
+}
+
+// AÇÃO DE CLICAR NO RELÓGIO LÁ NO TOPO
 btnSpeedrun.onclick = async () => {
-  // === INICIAR SPEEDRUN ===
   if (!srActive) {
     if (currentNodeId === null || breadcrumbPath.length === 0) {
       toast('Entre em um fluxo primeiro para iniciar o tempo.');
@@ -2173,166 +2357,60 @@ btnSpeedrun.onclick = async () => {
       srSoB = pbRoute.reduce((sum, title) => sum + (bestSegments[title] || 0), 0);
     }
     
-    srActive = true;
-    srHistory = [];
-    srNodeStart = Date.now();
-    srTotalSeconds = 0;
+    srActive = true; srPaused = false; srStepAccumulated = 0;
+    srHistory = []; srNodeStart = Date.now(); srTotalSeconds = 0;
 
     btnSpeedrun.classList.add('speedrun-active');
-    btnSpeedrun.classList.remove('sr-ahead', 'sr-behind', 'sr-neutral');
-    
-    let recordDisplay = '';
-    if (srCurrentRecord) {
-      btnSpeedrun.classList.add('sr-ahead');
-      // Reduzimos o tamanho e o espaçamento para caber as horas sem estourar a tela do celular
-      recordDisplay = `<span style="font-size:9.5px; opacity:0.85; font-weight:normal; margin-left:4px; border-left:1px solid currentColor; padding-left:4px; line-height:1.2;">
-        PB:${formatSRTime(srCurrentRecord)}<br>SB:${formatSRTime(srSoB)}
-      </span>`;
-    } else {
-      btnSpeedrun.classList.add('sr-neutral');
-    }
-
-    // A fonte do relógio foi para 14px e compactada (letter-spacing)
-    btnSpeedrun.innerHTML = `<div style="display:flex; align-items:center;">${icon('clock')} <span id="srClockText" style="margin-left:4px; font-size:14px; letter-spacing:-0.5px;">00:00</span> ${recordDisplay}</div>`;
-
-    srTimer = setInterval(() => {
-      // A MÁGICA CONTRA BLOQUEIO DE TELA: Em vez de somar +1, ele lê o relógio do sistema!
-      const pastTime = srHistory.reduce((acc, curr) => acc + curr.time, 0);
-      const currentStepTime = Math.floor((Date.now() - srNodeStart) / 1000);
-      srTotalSeconds = pastTime + currentStepTime;
-      
-      const t = document.getElementById('srClockText');
-      if (t) t.textContent = formatSRTime(srTotalSeconds);
-      
-      if (srCurrentRecord) {
-        if (srTotalSeconds > srCurrentRecord && btnSpeedrun.classList.contains('sr-ahead')) {
-          btnSpeedrun.classList.remove('sr-ahead');
-          btnSpeedrun.classList.add('sr-behind');
-        }
-      }
-    }, 1000);
-    
+    startSrInterval();
     toast('🚀 Speedrun Iniciado! Valendo!');
   } 
-  // === FINALIZAR E COMPARAR (MODAL) ===
   else {
-    clearInterval(srTimer);
-    srActive = false;
-    
-    btnSpeedrun.classList.remove('speedrun-active', 'sr-ahead', 'sr-behind', 'sr-neutral');
-    btnSpeedrun.innerHTML = icon('clock');
-
-    const tempoGasto = Math.floor((Date.now() - srNodeStart) / 1000);
-    const tituloPasso = currentNode ? displayTitle(currentNode) : 'Fim do Fluxo';
-    if (tempoGasto > 0) srHistory.push({ title: tituloPasso, time: tempoGasto });
-
-    const totalTempo = srHistory.reduce((acc, curr) => acc + curr.time, 0);
-
-    const rootNode = await dbGet(srRootId);
-    let recordTime = rootNode.speedrunRecord || null;
-    let bestSegments = rootNode.bestSegments || {};
-    let recordMsg = '';
-    let diffHtml = '';
-    let isNewRecord = false;
-    
-    // 1. ANÁLISE ETAPA POR ETAPA (Golds e Red Splits)
-    let htmlList = '';
-    srHistory.forEach(h => {
-      const previousBest = bestSegments[h.title];
-      let diffBadge = '';
-      let timeColor = 'var(--ink)';
-      let prevText = '';
-
-      if (!previousBest) {
-        bestSegments[h.title] = h.time;
-        diffBadge = `<span class="split-badge gold">Ouro!</span>`;
-        timeColor = 'var(--moss)';
-      } else {
-        const diff = h.time - previousBest;
-        prevText = `<span style="font-size:11px; color:var(--ink-soft); margin-right:8px;">Ant: ${formatSRTime(previousBest)}</span>`;
-        
-        if (diff < 0) {
-          bestSegments[h.title] = h.time; // Bateu o tempo da etapa (Gold Split!)
-          diffBadge = `<span class="split-badge ahead">-${formatSRTime(Math.abs(diff))}</span>`;
-          timeColor = 'var(--moss)';
-        } else if (diff > 0) {
-          diffBadge = `<span class="split-badge behind">+${formatSRTime(diff)}</span>`;
-          timeColor = 'var(--danger)';
-        } else {
-          diffBadge = `<span class="split-badge" style="background:var(--paper); border:1px solid var(--line); color:var(--ink-soft);">=</span>`;
-        }
-      }
-      
-      htmlList += `
-        <div class="sr-item">
-          <span class="sr-item-title" title="${escapeHTML(h.title)}">${escapeHTML(h.title)}</span>
-          <div style="display:flex; align-items:center; flex-shrink:0;">
-            ${prevText}
-            <span class="sr-item-time" style="color:${timeColor}">${formatSRTime(h.time)}</span>
-            ${diffBadge}
-          </div>
-        </div>
-      `;
-    });
-
-    // 2. ANÁLISE GERAL DO RECORDE (PB)
-    if (!recordTime || totalTempo < recordTime) {
-      rootNode.speedrunRecord = totalTempo;
-      rootNode.pbRoute = srHistory.map(h => h.title); // Salva a rota vitoriosa para o próximo SoB!
-      isNewRecord = true;
-      if (!recordTime) {
-        recordMsg = 'Tempo Base Registrado.';
-      } else {
-        recordMsg = `🎉 NOVO RECORDE! (O anterior era ${formatSRTime(recordTime)})`;
-        diffHtml = `<div class="sr-diff ahead">↓ -${formatSRTime(Math.abs(totalTempo - recordTime))} mais rápido!</div>`;
-      }
-    } else {
-      const diff = totalTempo - recordTime;
-      if (totalTempo > recordTime) {
-        recordMsg = `O Recorde (PB) continua sendo ${formatSRTime(recordTime)}`;
-        diffHtml = `<div class="sr-diff behind">↑ +${formatSRTime(diff)} mais lento</div>`;
-      } else {
-        recordMsg = `Empatou com o recorde de ${formatSRTime(recordTime)}!`;
-        diffHtml = `<div class="sr-diff" style="background:var(--paper); border:1px solid var(--line);">Empate cravado</div>`;
-      }
+    // === ESTÁ RODANDO! AO CLICAR, PAUSA INSTANTANEAMENTE E ABRE O MENU ===
+    if (!srPaused) {
+      srStepAccumulated += Math.floor((Date.now() - srNodeStart) / 1000);
+      clearInterval(srTimer);
+      srPaused = true;
+      updateSrVisuals(); 
     }
 
-    // Salva tudo no banco
-    rootNode.bestSegments = bestSegments;
-    await dbPut(rootNode);
-
     openModal({
-      title: 'Resultados (LiveSplit Mode)',
+      title: 'Cronômetro Pausado ⏱️',
       bodyHTML: `
-        <div class="total-budget-box" style="padding:16px; background: ${isNewRecord ? 'var(--moss-soft)' : 'var(--paper-raised)'}; border: 1px solid ${isNewRecord ? 'var(--moss)' : 'var(--line)'};">
-          <h4 style="margin:0 0 6px; font-size:12px; text-transform:uppercase; color: ${isNewRecord ? 'var(--moss)' : 'var(--ink-soft)'};">SEU TEMPO FINAL</h4>
-          <div class="val" style="font-size:36px; color: ${isNewRecord ? 'var(--moss)' : 'var(--ink)'};">${formatSRTime(totalTempo)}</div>
-          ${diffHtml}
-          <div class="sub" style="font-size:12px; margin-top:10px;">${recordMsg}</div>
+        <div class="total-budget-box" style="padding:16px; background:var(--amber-soft); color:var(--amber); border:1px solid var(--amber);">
+          <h4 style="margin:0 0 6px; font-size:12px; text-transform:uppercase; color:var(--amber);">Tempo Atual</h4>
+          <div class="val" style="font-size:36px;">${formatSRTime(srTotalSeconds)}</div>
         </div>
-        <div style="margin-top:18px;">
-          <span style="font-size:11.5px; font-weight:bold; color:var(--ink-soft);">ANÁLISE DE ETAPAS:</span>
-          <div class="sr-list-wrap">${htmlList || '<p class="hint" style="padding:10px;">Nenhum passo registrado.</p>'}</div>
-        </div>
-        <div class="modal-actions" style="margin-top:20px; justify-content:space-between;">
-          <button type="button" class="btn btn-ghost btn-danger" id="bResetSR">${icon('trash')} Apagar Histórico</button>
-          <button type="button" class="btn btn-primary" id="bOkSR">Fechar</button>
+        <p class="hint" style="text-align:center; margin-top:10px;">Você pode gerar orçamentos no botão + normalmente enquanto o tempo está pausado.</p>
+        <div class="modal-actions" style="margin-top:20px; display:flex; flex-direction:column; gap:10px;">
+          <button type="button" class="btn btn-primary" id="bResumeSR" style="width:100%; justify-content:center; padding:12px; font-size:15px;">▶️ Continuar Diagnóstico</button>
+          <button type="button" class="btn btn-ghost" id="bFinishSR" style="width:100%; justify-content:center; padding:12px; font-size:15px; background:var(--moss-soft); color:var(--moss); border-color:var(--moss);">🏁 Finalizar e Ver Resultados</button>
+          <button type="button" class="btn btn-ghost btn-danger" id="bCancelSR" style="width:100%; justify-content:center; padding:12px;">❌ Descartar e Cancelar</button>
         </div>
       `,
       onMount: (body) => {
-        body.querySelector('#bOkSR').onclick = closeModal;
-        body.querySelector('#bResetSR').onclick = async () => {
-          const ok = await confirmDialog('Apagar TODOS os tempos (Recorde e Ouros) deste diagnóstico?', 'Sim, apagar', true);
-          if(ok) {
-            const rootToUpdate = await dbGet(srRootId);
-            if (rootToUpdate) {
-              delete rootToUpdate.speedrunRecord;
-              delete rootToUpdate.bestSegments;
-              delete rootToUpdate.pbRoute;
-              await dbPut(rootToUpdate);
-            }
+        // Opção 1: Retoma de onde parou
+        body.querySelector('#bResumeSR').onclick = () => {
+          closeModal();
+          srPaused = false;
+          srNodeStart = Date.now(); // Reinicia a matemática a partir de agora
+          startSrInterval();
+        };
+        // Opção 2: Encerra
+        body.querySelector('#bFinishSR').onclick = () => {
+          closeModal();
+          finishSpeedrunAction();
+        };
+        // Opção 3: Joga o tempo fora
+        body.querySelector('#bCancelSR').onclick = async () => {
+          const ok = await confirmDialog('Tem certeza que deseja cancelar e apagar este tempo?', 'Sim, descartar', true);
+          if (ok) {
             closeModal();
-            toast('Histórico de Speedrun apagado com sucesso.');
+            clearInterval(srTimer);
+            srActive = false; srPaused = false;
+            btnSpeedrun.classList.remove('speedrun-active', 'sr-ahead', 'sr-behind', 'sr-neutral');
+            btnSpeedrun.style.background = ''; btnSpeedrun.style.color = ''; btnSpeedrun.style.boxShadow = ''; btnSpeedrun.style.animation = '';
+            btnSpeedrun.innerHTML = icon('clock');
+            toast('Speedrun cancelado.');
           }
         };
       }
