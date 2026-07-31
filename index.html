@@ -2350,7 +2350,7 @@ async function finishSpeedrunAction() {
             await dbPut(rootToUpdate);
           }
           closeModal();
-          toast('Histórico de Speedrun apagado com sucesso.');
+          toast('Histórico de Tempo apagado com sucesso.');
         }
       };
     }
@@ -2381,7 +2381,7 @@ btnSpeedrun.onclick = async () => {
 
     btnSpeedrun.classList.add('speedrun-active');
     startSrInterval();
-    toast('🚀 Speedrun Iniciado! Valendo!');
+    toast('🚀 Tempo Iniciado! Valendo!');
   } 
   else {
     // === ESTÁ RODANDO! AO CLICAR, PAUSA INSTANTANEAMENTE E ABRE O MENU ===
@@ -2429,7 +2429,7 @@ btnSpeedrun.onclick = async () => {
             btnSpeedrun.classList.remove('speedrun-active', 'sr-ahead', 'sr-behind', 'sr-neutral');
             btnSpeedrun.style.background = ''; btnSpeedrun.style.color = ''; btnSpeedrun.style.boxShadow = ''; btnSpeedrun.style.animation = '';
             btnSpeedrun.innerHTML = icon('clock');
-            toast('Speedrun cancelado.');
+            toast('Tempo cancelado.');
           }
         };
       }
