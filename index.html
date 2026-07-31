@@ -2006,20 +2006,18 @@ fabMenu.querySelectorAll('button[data-action]').forEach(btn => {
     else if(action==='add-image') fileImage.click();
     else if(action==='add-library') openLibraryModal({insertMode:true});
     
-    // === GERAR ORÇAMENTO (REAL GLOBAL + ESTIMADO DA ROTA) ===
     
-    // === GERAR ORÇAMENTO (REAL GLOBAL + ESTIMADO DA ROTA + CRONÔMETRO) ===
+    // === GERAR ORÇAMENTO (REAL GLOBAL + ESTIMADO DA ROTA + CRONÔMETRO + HISTÓRICO) ===
     else if(action==='calc-budget') {
       const routeNodes = await getRouteNodes();
       const formata = (v) => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
       
-      // Função unificada que soma valores do título E do texto juntos
       const getVal = (n) => extractValue(n.title + ' ' + (n.text || ''));
       
       let totalExecutado = 0;
       let executedItems = [];
       
-      // 1. O que já foi executado nas caixinhas do App
+      // 1. O que já foi executado nas caixinhas (Banco Inteiro)
       await dbCursorAll(n => {
         if (n.isBudgetDone) {
           const val = getVal(n);
@@ -2030,43 +2028,64 @@ fabMenu.querySelectorAll('button[data-action]').forEach(btn => {
         }
       });
 
-      // 1.5. AVALIAÇÃO DO CRONÔMETRO AO VIVO!
+      // 1.5. AVALIAÇÃO DO CRONÔMETRO E RASTREAMENTO DO HISTÓRICO!
+      let historyText = '';
       if (typeof srActive !== 'undefined' && srActive && srTotalSeconds > 0) {
-        const liveLabor = (srTotalSeconds / 3600) * VALOR_HORA;
+        
+        // Pega a matemática do tempo em tempo real com precisão de milissegundos
+        let liveTotalSeconds = srTotalSeconds;
+        if (!srPaused) {
+           const pastTime = srHistory.reduce((acc, curr) => acc + curr.time, 0);
+           const currentStepTime = srStepAccumulated + Math.floor((Date.now() - srNodeStart) / 1000);
+           liveTotalSeconds = pastTime + currentStepTime;
+        }
+
+        // Calcula o Dinheiro
+        const liveLabor = (liveTotalSeconds / 3600) * VALOR_HORA;
         if (liveLabor > 0) {
           totalExecutado += liveLabor;
-          executedItems.push(`• [x] ⏱️ Mão de Obra de Diagnóstico (${formatSRTime(srTotalSeconds)}) - ${formata(liveLabor)}`);
+          executedItems.push(`• [x] ⏱️ Mão de Obra de Diagnóstico (${formatSRTime(liveTotalSeconds)}) - ${formata(liveLabor)}`);
         }
+
+        // Monta o extrato de rastreamento (Por onde o mecânico andou)
+        let steps = srHistory.map(h => `  - ${h.title} (${formatSRTime(h.time)})`);
+        let currentStepTime = srPaused ? srStepAccumulated : srStepAccumulated + Math.floor((Date.now() - srNodeStart) / 1000);
+        let currentTitle = currentNode ? displayTitle(currentNode) : 'Início';
+        
+        if (currentStepTime > 0 || steps.length === 0) {
+          steps.push(`  - ${currentTitle} (${formatSRTime(currentStepTime)})`);
+        }
+        
+        historyText = `⏱️ CAMINHO PERCORRIDO (Testes Realizados):\n${steps.join('\n')}\n\n`;
       }
 
-      // 2. O caminho atual (Estimativa)
+      // 2. O caminho atual (Estimativa baseada em onde você está parado agora)
       let totalEstimado = 0;
       let routeItems = [];
       
       routeNodes.forEach(n => {
         const val = getVal(n);
         let valStr = val > 0 ? ` - ${formata(val)}` : '';
-        let prefix = '';
-        
-        if (n.isBudgetDone) {
-          prefix = '• [x] '; 
-        } else {
-          prefix = '• [ ] ';
-          if (val > 0) totalEstimado += val; // Só soma na estimativa o que não foi pago
-        }
+        let prefix = n.isBudgetDone ? '• [x] ' : '• [ ] ';
+        if (!n.isBudgetDone && val > 0) totalEstimado += val; 
         
         routeItems.push(`${prefix}${displayTitle(n)}${valStr}`);
       });
 
       let totalGeral = totalExecutado + totalEstimado;
 
-      // Montando o texto final
+      // === MONTANDO O TEXTO FINAL PARA COPIAR ===
       let finalCopyText = 'RESUMO DO DIAGNÓSTICO:\n\n';
       
       if (executedItems.length > 0) {
         finalCopyText += '✅ SERVIÇOS EXECUTADOS (Gasto Real):\n';
         finalCopyText += executedItems.join('\n');
         finalCopyText += `\nSubtotal: ${formata(totalExecutado)}\n\n`;
+      }
+      
+      // Injeta o Rastreamento Cronológico logo abaixo dos gastos executados!
+      if (historyText) {
+        finalCopyText += historyText;
       }
       
       finalCopyText += '🔍 ROTA ATUAL (Estimativa p/ Aprovação):\n';
