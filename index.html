@@ -1605,7 +1605,7 @@ function openSettingsModal(){
               <input type="number" id="fValorHora" value="${VALOR_HORA}" step="0.01">
             </label>
             <p class="hint">Este valor será usado para converter o tempo do cronômetro (Speedrun) e as anotações de tempo (ex: 30m, 2h) em Reais (R$) no seu orçamento.</p>
-            <div class="modal-actions" style="margin-top:20px;">
+            <div class="modal-actions" style="margin-top:20px; ">
               <button type="button" class="btn btn-ghost" id="fCancel">Cancelar</button>
               <button type="button" class="btn btn-primary" id="fSave">${icon('check')} Salvar</button>
             </div>
@@ -2381,7 +2381,7 @@ btnSpeedrun.onclick = async () => {
 
     btnSpeedrun.classList.add('speedrun-active');
     startSrInterval();
-    toast('🚀 Tempo Iniciado! Valendo!');
+    toast('🚀 Cronômetro Iniciado! Valendo!');
   } 
   else {
     // === ESTÁ RODANDO! AO CLICAR, PAUSA INSTANTANEAMENTE E ABRE O MENU ===
