@@ -134,7 +134,7 @@ body.modal-open{overflow:hidden;}
   word-wrap: break-word;
   font-family: var(--font-mono); /* Deixa com cara de código */
   background: var(--paper);
-  padding: 30px 14px 14px 14px; /* Espaço extra no topo para o botão */
+  padding: 20px 5px 5px 5px; /* Espaço extra no topo para o botão */
   border-radius: 10px;
   border: 1px solid var(--line);
   line-height: 1.6;
@@ -159,7 +159,7 @@ body.modal-open{overflow:hidden;}
     background: var(--paper-raised);
     border: 1px solid var(--line);
     color: var(--ink-soft);
-    padding: 5px 5px;
+    padding: 3px 3px;
     border-radius: 6px;
     font-size: 9px;
     font-weight: 700;
@@ -169,7 +169,7 @@ body.modal-open{overflow:hidden;}
     gap: 6px;
     transition: all 0.2s ease;
 }
-.btn-copy svg { width: 12px; height: 12px; }
+.btn-copy svg { width: 10px; height: 10px; }
 .btn-copy:hover { color: var(--moss); border-color: var(--moss); }
 .content-caption{color:var(--ink-soft);font-size:13.5px;font-style:italic;margin:8px 0 0;}
 .content-actions{display:flex;justify-content: center;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);}
@@ -1425,6 +1425,9 @@ fileImage.onchange = async ()=>{
 /* =======================================================================
    BIBLIOTECA (busca + reaproveitamento de qualquer item já criado)
 ======================================================================= */
+/* =======================================================================
+   BIBLIOTECA (Busca, Filtros Avançados e Reaproveitamento)
+======================================================================= */
 function openLibraryModal(opts={}){
   openModal({
     title:'Biblioteca',
@@ -1432,7 +1435,13 @@ function openLibraryModal(opts={}){
     bodyHTML:`
       <div class="lib-toolbar">
         <input type="search" id="libQuery" placeholder="Buscar por título ou texto...">
-        <div class="lib-filters">
+        
+        <!-- NOVO: Filtro Dinâmico de Fluxos -->
+        <select id="libFlowFilter" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; font-size:14.5px; background:var(--paper); color:var(--ink); font-weight:bold;">
+          <option value="all">🌍 Em todo o aplicativo</option>
+        </select>
+
+        <div class="lib-filters" style="margin-top: 4px;">
           <button type="button" class="chip chip--active" data-type="all">Tudo</button>
           <button type="button" class="chip" data-type="text">${icon('text')} Texto</button>
           <button type="button" class="chip" data-type="audio">${icon('audio')} Áudio</button>
@@ -1441,19 +1450,59 @@ function openLibraryModal(opts={}){
         </div>
       </div>
       <div id="libResults" class="lib-results"><p class="hint">Carregando…</p></div>`,
-    onMount:(body)=>{
+    onMount: async (body)=>{
       let typeFilter = 'all';
       let favOnly = !!opts.favOnly;
       let queryText = '';
+      
       const resultsEl = body.querySelector('#libResults');
       const chips = Array.from(body.querySelectorAll('.chip'));
       const queryInput = body.querySelector('#libQuery');
+      const flowSelect = body.querySelector('#libFlowFilter');
 
       if(favOnly){
         chips.forEach(c=>{ if(c.dataset.fav) c.classList.add('chip--active'); });
       }
 
+      // 1. LÊ O APP INTEIRO E MAPEIA QUEM É FILHO DE QUEM
+      const allNodes = [];
+      await dbCursorAll(n => allNodes.push(n));
+      
+      const parentMap = new Map();
+      allNodes.forEach(n => parentMap.set(n.id, n.parentId));
+      
+      // Função farejadora que descobre o "Avô" (A raiz principal) de qualquer item
+      const getRootId = (id) => {
+        let curr = id;
+        while(curr && parentMap.get(curr) !== ROOT && parentMap.get(curr) !== undefined){
+          curr = parentMap.get(curr);
+        }
+        return curr;
+      };
+
+      // 2. DESCOBRE OS FLUXOS PRINCIPAIS E AONDE ESTAMOS AGORA
+      const rootNodes = allNodes.filter(n => n.parentId === ROOT);
+      const currentRootId = (breadcrumbPath && breadcrumbPath.length > 0) ? breadcrumbPath[0].id : null;
+
+      // 3. POPULA O MENU DE CATEGORIAS AUTOMATICAMENTE
+      if (currentRootId) {
+        flowSelect.innerHTML += `<option value="current" style="color:var(--moss);">📍 Somente neste fluxo atual</option>`;
+      }
+      if (rootNodes.length > 0) {
+        const group = document.createElement('optgroup');
+        group.label = "Ou escolha um Fluxo específico:";
+        rootNodes.forEach(root => {
+          const opt = document.createElement('option');
+          opt.value = root.id;
+          opt.textContent = `📁 ${displayTitle(root)}`;
+          group.appendChild(opt);
+        });
+        flowSelect.appendChild(group);
+      }
+
+      // Eventos de Busca e Filtro
       queryInput.oninput = debounce((e)=>{ queryText = e.target.value.trim().toLowerCase(); refresh(); }, 220);
+      flowSelect.onchange = () => refresh();
 
       chips.forEach(chip=>{
         chip.onclick = ()=>{
@@ -1469,22 +1518,37 @@ function openLibraryModal(opts={}){
         };
       });
 
+      // 4. A MÁGICA DA ATUALIZAÇÃO (Onde o filtro acontece)
       async function refresh(){
         resultsEl.innerHTML = '<p class="hint">Buscando…</p>';
         const matches = [];
-        await dbCursorAll(node=>{
-          if(matches.length >= 200) return;
-          if(typeFilter!=='all' && node.type!==typeFilter) return;
-          if(favOnly && !node.favorite) return;
+        const flowFilterValue = flowSelect.value;
+
+        for (const node of allNodes) {
+          if(matches.length >= 200) break; // Limite para não travar o celular
+          
+          if(typeFilter !== 'all' && node.type !== typeFilter) continue;
+          if(favOnly && !node.favorite) continue;
+          
+          // O Filtro de Fluxo atuando
+          const nodeRootId = getRootId(node.id);
+          if (flowFilterValue === 'current') {
+            if (nodeRootId !== currentRootId) continue;
+          } else if (flowFilterValue !== 'all') {
+            if (nodeRootId !== flowFilterValue) continue;
+          }
+
           if(queryText){
             const hay = ((node.title||'')+' '+(node.text||'')).toLowerCase();
-            if(!hay.includes(queryText)) return;
+            if(!hay.includes(queryText)) continue;
           }
           matches.push(node);
-        });
+        }
+        
         matches.sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
         await renderLibResults(matches, resultsEl);
       }
+      
       if(opts.focusSearch){ setTimeout(()=>queryInput.focus(), 60); }
       refresh();
     }
