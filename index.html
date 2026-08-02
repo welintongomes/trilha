@@ -453,6 +453,21 @@ body.modal-open{overflow:hidden;}
 /* Splits pequenos da Lista */
 .split-badge { padding: 3px 6px; font-size: 11px; border-radius: 5px; margin-left: 6px; font-weight: bold; font-family: var(--font-mono); min-width: 48px; text-align: center; }
 .split-badge.gold { background: #F5E9D2; color: #B8862B; box-shadow: 0 0 0 1px #E0B15C; } /* Ouro (Novo melhor tempo da etapa) */
+/* --- Barra de Marcadores (Formulário) --- */
+.marker-toolbar {
+  display: flex; overflow-x: auto; gap: 5px; padding: 2px 0;
+  scrollbar-width: none; -ms-overflow-style: none; /* Esconde scrollbar nativa */
+}
+.marker-toolbar::-webkit-scrollbar { display: none; }
+.marker-chip {
+  background: var(--paper-raised); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: bold;
+  white-space: nowrap; color: var(--ink-soft); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all 0.2s ease; user-select: none;
+}
+.marker-chip:hover { border-color: var(--moss-soft); color: var(--moss); }
+.marker-chip:active { background: var(--moss-soft); color: var(--moss); border-color: var(--moss); }
 </style>
 </head>
 <body>
@@ -1264,9 +1279,22 @@ function openTextModal(){
     bodyHTML:`
       <label class="field"><span>Título (opcional)</span>
         <input type="text" id="fTitle" maxlength="120" placeholder="Ex.: Etapa 1 — Diagnóstico">
-      </label>
-      <label class="field"><span>Anotação</span>
-        <textarea id="fText" rows="8" placeholder="Escreva sua anotação..."></textarea>
+      <label class="field">
+        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; margin-bottom: 6px;margin-top: 6px;">
+          <span style="font-size:12px; font-weight:600; color:var(--ink-soft); margin-right:8px;">Anotação</span>
+          
+          <!-- BARRINHA DE MARCADORES -->
+          <div class="marker-toolbar">
+            <button type="button" class="marker-chip" data-tag="b" title="Negrito"><b>B</b></button>
+            <button type="button" class="marker-chip" data-tag="h" title="Destaque Amarelo"><mark style="background:transparent; color:var(--amber);">HL</mark></button>
+            <button type="button" class="marker-chip" data-tag="u" title="Sublinhado"><u>U</u></button>
+            <button type="button" class="marker-chip" data-tag="r" title="Vermelho" style="color:var(--danger);">R</button>
+            <button type="button" class="marker-chip" data-tag="c" title="Oculto para o Cliente">🤫 Oculto</button>
+            <button type="button" class="marker-chip" data-tag="l" title="Link Clicável">🔗 Link</button>
+          </div>
+        </div>
+        
+        <textarea id="fText" rows="5" placeholder="Valores (ex: R$ 50,00), tempo (ex: 30m) ou detalhes..."></textarea>
       </label>
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" id="fCancel">Cancelar</button>
@@ -1274,6 +1302,33 @@ function openTextModal(){
       </div>`,
     onMount:(body)=>{
       body.querySelector('#fCancel').onclick = closeModal;
+      // === MÁGICA DOS MARCADORES: CLICOU NO CHIP, INSERE O CÓDIGO! ===
+      const fText = body.querySelector('#fText');
+      const chips = body.querySelectorAll('.marker-chip');
+      chips.forEach(chip => {
+        chip.onclick = () => {
+          const tag = chip.dataset.tag;
+          const start = fText.selectionStart;
+          const end = fText.selectionEnd;
+          const text = fText.value;
+          
+          // Se não tiver nada selecionado, ele cria um texto de exemplo
+          let defaultText = 'texto';
+          if (tag === 'l') defaultText = 'Nome do Site | www.google.com';
+          if (tag === 'c') defaultText = 'Custo: R$ 0,00';
+          
+          const selected = text.substring(start, end) || defaultText;
+          const replacement = `~${tag} ${selected} ${tag}~`;
+          
+          // Injeta no texto
+          fText.value = text.substring(0, start) + replacement + text.substring(end);
+          
+          // Devolve o foco para o teclado do celular e já deixa a palavra selecionada!
+          fText.focus();
+          fText.setSelectionRange(start + tag.length + 2, start + tag.length + 2 + selected.length);
+        };
+      });
+      // ==============================================================
       body.querySelector('#fSave').onclick = async ()=>{
         const title = body.querySelector('#fTitle').value.trim();
         const text = body.querySelector('#fText').value.trim();
@@ -1289,6 +1344,22 @@ function openTextModal(){
 
 function openEditModal(node){
   const isText = node.type === 'text';
+  
+  // Criamos a barrinha de botões como uma variável para não repetir código!
+  const toolbarHTML = (label) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; width:100%; margin-bottom: 6px;">
+      <span style="font-size:12px; font-weight:600; color:var(--ink-soft); margin-right:8px;">${label}</span>
+      <div class="marker-toolbar">
+        <button type="button" class="marker-chip" data-tag="b" title="Negrito"><b>B</b></button>
+        <button type="button" class="marker-chip" data-tag="h" title="Destaque Amarelo"><mark style="background:transparent; color:var(--amber);">HL</mark></button>
+        <button type="button" class="marker-chip" data-tag="u" title="Sublinhado"><u>U</u></button>
+        <button type="button" class="marker-chip" data-tag="r" title="Vermelho" style="color:var(--danger);">R</button>
+        <button type="button" class="marker-chip" data-tag="c" title="Oculto para o Cliente">🤫 Oculto</button>
+        <button type="button" class="marker-chip" data-tag="l" title="Link Clicável">🔗 Link</button>
+      </div>
+    </div>
+  `;
+
   openModal({
     title:'Editar',
     bodyHTML:`
@@ -1296,11 +1367,11 @@ function openEditModal(node){
         <input type="text" id="eTitle" maxlength="120" value="${escapeHTML(node.title||'')}">
       </label>
       ${isText
-        ? `<label class="field"><span>Anotação</span><textarea id="eText" rows="8">${escapeHTML(node.text||'')}</textarea></label>`
+        ? `<label class="field">${toolbarHTML('Anotação')}<textarea id="eText" rows="8">${escapeHTML(node.text||'')}</textarea></label>`
         : `<div class="media-preview" id="ePreview"></div>
-           <label class="field"><span>Legenda (opcional)</span><textarea id="eText" rows="3">${escapeHTML(node.text||'')}</textarea></label>`
+           <label class="field">${toolbarHTML('Legenda (opcional)')}<textarea id="eText" rows="3">${escapeHTML(node.text||'')}</textarea></label>`
       }
-      <div class="modal-actions">
+      <div class="modal-actions" style="margin-top:20px;">
         <button type="button" class="btn btn-ghost" id="eCancel">Cancelar</button>
         <button type="button" class="btn btn-primary" id="eSave">${icon('check')} Salvar</button>
       </div>`,
@@ -1315,6 +1386,32 @@ function openEditModal(node){
           prevWrap.appendChild(im);
         }
       }
+
+      // === MÁGICA DOS MARCADORES NA EDIÇÃO ===
+      const eText = body.querySelector('#eText');
+      const chips = body.querySelectorAll('.marker-chip');
+      chips.forEach(chip => {
+        chip.onclick = () => {
+          const tag = chip.dataset.tag;
+          const start = eText.selectionStart;
+          const end = eText.selectionEnd;
+          const text = eText.value;
+          
+          let defaultText = 'texto';
+          if (tag === 'l') defaultText = 'Nome do Site | www.google.com';
+          if (tag === 'c') defaultText = 'Custo: R$ 0,00';
+          
+          const selected = text.substring(start, end) || defaultText;
+          const replacement = `~${tag} ${selected} ${tag}~`;
+          
+          eText.value = text.substring(0, start) + replacement + text.substring(end);
+          
+          eText.focus();
+          eText.setSelectionRange(start + tag.length + 2, start + tag.length + 2 + selected.length);
+        };
+      });
+      // ==========================================
+
       body.querySelector('#eCancel').onclick = closeModal;
       body.querySelector('#eSave').onclick = async ()=>{
         node.title = body.querySelector('#eTitle').value.trim();
