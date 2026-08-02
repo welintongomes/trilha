@@ -134,11 +134,11 @@ body.modal-open{overflow:hidden;}
   word-wrap: break-word;
   font-family: var(--font-mono); /* Deixa com cara de código */
   background: var(--paper);
-  padding: 20px 5px 5px 5px; /* Espaço extra no topo para o botão */
+  padding: 25px 5px 5px 5px; /* Espaço extra no topo para o botão */
   border-radius: 10px;
   border: 1px solid var(--line);
   line-height: 1.6;
-  font-size: 10px;
+  font-size: 12px;
   margin: 0;
   overflow: auto;
   max-height: 190px;
@@ -201,8 +201,8 @@ body.modal-open{overflow:hidden;}
 .btn-text-tool.active { background: var(--moss-soft); color: var(--moss); border-color: var(--moss); }
 
 /* Modificadores Temporários de Exibição */
-.content-text.is-large { font-size: 19px !important; line-height: 1.7 !important; }
-.content-text.is-wrap { white-space: pre-wrap !important; word-break: break-word !important; }
+.content-text.is-large { font-size: 19px !important; line-height: 1.4 !important; }
+.content-text.is-wrap { white-space: normal !important; word-break: break-word !important; }
 /* Cards (children list) */
 .card{
   display:flex;align-items:stretch;background:var(--paper-raised);
@@ -884,12 +884,12 @@ async function renderContent(){
     ? (n.text && n.text.trim()
         ? `<div class="text-block-wrapper">
              <div class="text-toolbar">
+              <button type="button" class="btn-text-tool" id="btnCopyText" title="Copiar texto">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                Copiar
+              </button>
                <button type="button" class="btn-text-tool ${savedZoom ? 'active' : ''}" id="btnToggleZoom" title="Aumentar texto">A+</button>
                <button type="button" class="btn-text-tool ${savedWrap ? 'active' : ''}" id="btnToggleWrap" title="Quebrar linhas">↩</button>
-               <button type="button" class="btn-text-tool" id="btnCopyText" title="Copiar texto">
-                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                 Copiar
-               </button>
              </div>
              <!-- Aplica as classes salvas automaticamente -->
              <pre class="content-text ${savedZoom ? 'is-large' : ''} ${savedWrap ? 'is-wrap' : ''}" id="preContentText">${formatMarkers(n.text)}</pre>
