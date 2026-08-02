@@ -630,39 +630,30 @@ async function deleteNodeCascade(id){
 // --- MOTOR DE MARCADORES EXPANSÍVEL ---
 function formatMarkers(text) {
   if (!text) return '';
-  // 1. Escapa o texto primeiro para segurança (ninguém injeta código malicioso)
   let html = escapeHTML(text);
   
-  // 2. Dicionário de marcadores
   const markers = [
-    // Link: ~l www.google.com l~ OU ~l Manual PDF | www.google.com l~
-    {
-      regex: /~l\s+(.*?)\s+l~/g,
-      replacer: (match, content) => {
-        let label = content;
-        let url = content;
-        if (content.includes('|')) {
-          const parts = content.split('|');
-          label = parts[0].trim();
-          url = parts[1].trim();
-        }
+    // 1. Oculto (Confidencial): ~c texto c~ 
+    { regex: /~c\s+([\s\S]*?)\s+c~/g, replacer: (match, content) => `<span style="background: var(--line); color: var(--ink-soft); font-style: italic; padding: 2px 6px; border-radius: 4px; border: 1px dashed var(--ink-soft); font-size: 0.9em;" title="Oculto para o cliente">🤫 ${content}</span>` },
+    // 2. Link: ~l www.google.com l~
+    { regex: /~l\s+([\s\S]*?)\s+l~/g, replacer: (match, content) => {
+        let label = content; let url = content;
+        if (content.includes('|')) { const parts = content.split('|'); label = parts[0].trim(); url = parts[1].trim(); }
         if (!url.startsWith('http') && !url.startsWith('mailto:')) url = 'https://' + url;
         return `<a href="${url}" target="_blank" style="color: var(--moss); text-decoration: underline; font-weight: bold;">${label}</a>`;
       }
     },
-    // Negrito: ~b texto importante b~
-    {
-      regex: /~b\s+(.*?)\s+b~/g,
-      replacer: (match, content) => `<strong>${content}</strong>`
-    },
-    // Destaque (Marca-texto): ~h erro crítico h~
-    {
-      regex: /~h\s+(.*?)\s+h~/g,
-      replacer: (match, content) => `<mark style="background: var(--amber-soft); color: var(--amber); padding: 0 4px; border-radius: 4px;">${content}</mark>`
-    }
+    // 3. Negrito: ~b texto b~
+    { regex: /~b\s+([\s\S]*?)\s+b~/g, replacer: (match, content) => `<strong>${content}</strong>` },
+    // 4. Destaque (Marca-texto): ~h texto h~
+    { regex: /~h\s+([\s\S]*?)\s+h~/g, replacer: (match, content) => `<mark style="background: var(--amber-soft); color: var(--amber); padding: 0 4px; border-radius: 4px;">${content}</mark>` },
+    // 5. Sublinhado: ~u texto u~
+    { regex: /~u\s+([\s\S]*?)\s+u~/g, replacer: (match, content) => `<u style="text-decoration: underline;">${content}</u>` },
+    // 6. Texto Vermelho: ~r texto r~
+    { regex: /~r\s+([\s\S]*?)\s+r~/g, replacer: (match, content) => `<span style="color: var(--danger); font-weight: bold;">${content}</span>` }
   ];
 
-  // 3. Aplica todos os marcadores
+  // Aplica todos os marcadores, permitindo que você coloque um dentro do outro!
   markers.forEach(m => { html = html.replace(m.regex, m.replacer); });
   return html;
 }
@@ -671,12 +662,24 @@ function formatMarkers(text) {
 function cleanMarkersForText(text) {
   if (!text) return '';
   let clean = text;
-  // Extrai a URL para o zap: de "~l Site | www.X.com l~" vira "www.X.com"
-  clean = clean.replace(/~l\s+(.*?)\s+l~/g, (match, content) => content.includes('|') ? content.split('|')[1].trim() : content);
-  // Converte Negrito pro formato do zap: ~b X b~ vira *X*
-  clean = clean.replace(/~b\s+(.*?)\s+b~/g, '*$1*');
-  // Tira o destaque para texto puro: ~h X h~ vira _X_
-  clean = clean.replace(/~h\s+(.*?)\s+h~/g, '_$1_');
+  
+  // A. REMOVE COMPLETAMENTE os textos confidenciais (~c ... c~)
+  clean = clean.replace(/~c\s+([\s\S]*?)\s+c~/g, '');
+  
+  // B. Traduz Link pro zap: ~l Site | www.X.com l~ vira www.X.com
+  clean = clean.replace(/~l\s+([\s\S]*?)\s+l~/g, (match, content) => content.includes('|') ? content.split('|')[1].trim() : content);
+  
+  // C. Converte Negrito: ~b X b~ vira *X*
+  clean = clean.replace(/~b\s+([\s\S]*?)\s+b~/g, '*$1*');
+  
+  // D. Converte os outros tirando apenas o marcador (Zap não tem cor, entao vira texto puro)
+  clean = clean.replace(/~h\s+([\s\S]*?)\s+h~/g, '_$1_'); // h -> itálico no zap
+  clean = clean.replace(/~u\s+([\s\S]*?)\s+u~/g, '$1'); // u -> texto puro
+  clean = clean.replace(/~r\s+([\s\S]*?)\s+r~/g, '$1'); // r -> texto puro
+  
+  // E. Limpa espaços duplos que podem sobrar ao apagar o confidencial
+  clean = clean.replace(/\s{2,}/g, ' ').trim();
+  
   return clean;
 }
 function uuid(){
@@ -2047,19 +2050,22 @@ function extractValue(text) {
   if(!text) return 0;
   let total = 0;
   
-  // 1. Procura valores de dinheiro (ex: R$ 150,00)
-  let matchMoney = text.match(/R\$\s*(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/i);
-  if(!matchMoney) matchMoney = text.match(/\b(\d{1,3}(?:\.\d{3})*,\d{2})\b/);
+  // MAGIA FINANCEIRA: Remove textos confidenciais ANTES de calcular o dinheiro/tempo!
+  // Assim você pode anotar "~c custo R$ 27,00 c~" e ele não vai cobrar o cliente duas vezes!
+  let safeText = text.replace(/~c\s+([\s\S]*?)\s+c~/g, '');
+  
+  // 1. Procura valores de dinheiro (ex: R$ 150,00) na parte visível
+  let matchMoney = safeText.match(/R\$\s*(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/i);
+  if(!matchMoney) matchMoney = safeText.match(/\b(\d{1,3}(?:\.\d{3})*,\d{2})\b/);
   if(matchMoney) {
     const numStr = matchMoney[1].replace(/\./g, '').replace(',', '.');
     total += parseFloat(numStr) || 0;
   }
   
-  // 2. Procura tempo de mão de obra (ex: 30m, 2h, 1.5h, 90min)
-  // CORREÇÃO: O Lookahead negativo (?!~) impede de pegar 'h~' ou 'm~' dos marcadores!
+  // 2. Procura tempo de mão de obra (ex: 30m, 2h) na parte visível
   const regexTime = /\b(\d+(?:[.,]\d+)?)\s*(h(?!~)|m(?!~)|min|hora|horas)\b/gi;
   let matchTime;
-  while ((matchTime = regexTime.exec(text)) !== null) {
+  while ((matchTime = regexTime.exec(safeText)) !== null) {
     const num = parseFloat(matchTime[1].replace(',', '.'));
     const unit = matchTime[2].toLowerCase();
     
