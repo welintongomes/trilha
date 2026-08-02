@@ -289,10 +289,10 @@ body.modal-open{overflow:hidden;}
 @keyframes popIn{from{transform:scale(.96);opacity:0;}to{transform:scale(1);opacity:1;}}
 
 /* Forms */
-.field{display:block;margin-bottom:14px;}
+.field{display:block;margin-bottom:5px;}
 .field span{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:6px;font-weight:700;}
 .field input,.field textarea{
-  width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+  width:100%;border:1px solid var(--line); white-space: pre; margin-top: 5px; border-radius:10px;padding:10px 12px;
   font-size:14.5px;background:var(--paper);color:var(--ink);resize:vertical;
 }
 .field input:focus,.field textarea:focus{outline:2px solid var(--moss);outline-offset:1px;border-color:var(--moss);}
@@ -1279,9 +1279,11 @@ function openTextModal(){
     bodyHTML:`
       <label class="field"><span>Título (opcional)</span>
         <input type="text" id="fTitle" maxlength="120" placeholder="Ex.: Etapa 1 — Diagnóstico">
+        <span style="font-size:12px; font-weight:600; color:var(--ink-soft); margin-right:8px;">Anotação</span>
+        <textarea id="fText" rows="5" placeholder="Valores (ex: R$ 50,00), tempo (ex: 30m) ou detalhes..."></textarea>
       <label class="field">
         <div style="display:flex; justify-content:space-between; align-items:center; width:100%; margin-bottom: 6px;margin-top: 6px;">
-          <span style="font-size:12px; font-weight:600; color:var(--ink-soft); margin-right:8px;">Anotação</span>
+          
           
           <!-- BARRINHA DE MARCADORES -->
           <div class="marker-toolbar">
@@ -1294,7 +1296,7 @@ function openTextModal(){
           </div>
         </div>
         
-        <textarea id="fText" rows="5" placeholder="Valores (ex: R$ 50,00), tempo (ex: 30m) ou detalhes..."></textarea>
+        
       </label>
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" id="fCancel">Cancelar</button>
@@ -1345,18 +1347,15 @@ function openTextModal(){
 function openEditModal(node){
   const isText = node.type === 'text';
   
-  // Criamos a barrinha de botões como uma variável para não repetir código!
-  const toolbarHTML = (label) => `
-    <div style="display:flex; justify-content:space-between; align-items:center; width:100%; margin-bottom: 6px;">
-      <span style="font-size:12px; font-weight:600; color:var(--ink-soft); margin-right:8px;">${label}</span>
-      <div class="marker-toolbar">
-        <button type="button" class="marker-chip" data-tag="b" title="Negrito"><b>B</b></button>
-        <button type="button" class="marker-chip" data-tag="h" title="Destaque Amarelo"><mark style="background:transparent; color:var(--amber);">HL</mark></button>
-        <button type="button" class="marker-chip" data-tag="u" title="Sublinhado"><u>U</u></button>
-        <button type="button" class="marker-chip" data-tag="r" title="Vermelho" style="color:var(--danger);">R</button>
-        <button type="button" class="marker-chip" data-tag="c" title="Oculto para o Cliente">🤫 Oculto</button>
-        <button type="button" class="marker-chip" data-tag="l" title="Link Clicável">🔗 Link</button>
-      </div>
+  // Barra de ferramentas limpa (sem o título, que agora fica no topo da caixa)
+  const toolbarHTML = `
+    <div class="marker-toolbar" style="margin-top: 2px; margin-bottom: 12px; padding: 4px 0;">
+      <button type="button" class="marker-chip" data-tag="b" title="Negrito"><b>B</b></button>
+      <button type="button" class="marker-chip" data-tag="h" title="Destaque Amarelo"><mark style="background:transparent; color:var(--amber);">HL</mark></button>
+      <button type="button" class="marker-chip" data-tag="u" title="Sublinhado"><u>U</u></button>
+      <button type="button" class="marker-chip" data-tag="r" title="Vermelho" style="color:var(--danger);">R</button>
+      <button type="button" class="marker-chip" data-tag="c" title="Oculto para o Cliente">🤫 Oculto</button>
+      <button type="button" class="marker-chip" data-tag="l" title="Link Clicável">🔗 Link</button>
     </div>
   `;
 
@@ -1366,12 +1365,21 @@ function openEditModal(node){
       <label class="field"><span>Título</span>
         <input type="text" id="eTitle" maxlength="120" value="${escapeHTML(node.title||'')}">
       </label>
+      
       ${isText
-        ? `<label class="field">${toolbarHTML('Anotação')}<textarea id="eText" rows="8">${escapeHTML(node.text||'')}</textarea></label>`
+        ? `<label class="field" style="margin-bottom: 4px;"><span>Anotação</span>
+             <textarea id="eText" rows="8">${escapeHTML(node.text||'')}</textarea>
+           </label>`
         : `<div class="media-preview" id="ePreview"></div>
-           <label class="field">${toolbarHTML('Legenda (opcional)')}<textarea id="eText" rows="3">${escapeHTML(node.text||'')}</textarea></label>`
+           <label class="field" style="margin-bottom: 4px;"><span>Legenda (opcional)</span>
+             <textarea id="eText" rows="3">${escapeHTML(node.text||'')}</textarea>
+           </label>`
       }
-      <div class="modal-actions" style="margin-top:20px;">
+      
+      <!-- A BARRINHA AGORA FICA AQUI, ABAIXO DO TEXTO -->
+      ${toolbarHTML}
+
+      <div class="modal-actions" style="margin-top:14px;">
         <button type="button" class="btn btn-ghost" id="eCancel">Cancelar</button>
         <button type="button" class="btn btn-primary" id="eSave">${icon('check')} Salvar</button>
       </div>`,
@@ -1424,7 +1432,6 @@ function openEditModal(node){
     }
   });
 }
-
 /* =======================================================================
    ÁUDIO — gravação
 ======================================================================= */
