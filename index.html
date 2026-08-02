@@ -138,7 +138,7 @@ body.modal-open{overflow:hidden;}
   border-radius: 10px;
   border: 1px solid var(--line);
   line-height: 1.6;
-  font-size: 14px;
+  font-size: 10px;
   margin: 0;
   overflow: auto;
   max-height: 190px;
@@ -173,7 +173,36 @@ body.modal-open{overflow:hidden;}
 .btn-copy:hover { color: var(--moss); border-color: var(--moss); }
 .content-caption{color:var(--ink-soft);font-size:13.5px;font-style:italic;margin:8px 0 0;}
 .content-actions{display:flex;justify-content: center;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);}
+/* --- Barra de Ferramentas da Caixa de Texto --- */
+.text-toolbar {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: flex;
+  gap: 10px;
+  z-index: 5;
+}
+.btn-text-tool {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    padding: 1px 9px;
+    border-radius: 6px;
+    font-size: 9px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+.btn-text-tool:hover { color: var(--moss); border-color: var(--moss); }
+.btn-text-tool.active { background: var(--moss-soft); color: var(--moss); border-color: var(--moss); }
 
+/* Modificadores Temporários de Exibição */
+.content-text.is-large { font-size: 19px !important; line-height: 1.7 !important; }
+.content-text.is-wrap { white-space: pre-wrap !important; word-break: break-word !important; }
 /* Cards (children list) */
 .card{
   display:flex;align-items:stretch;background:var(--paper-raised);
@@ -598,6 +627,58 @@ async function deleteNodeCascade(id){
 /* =======================================================================
    UTILITÁRIOS
 ======================================================================= */
+// --- MOTOR DE MARCADORES EXPANSÍVEL ---
+function formatMarkers(text) {
+  if (!text) return '';
+  // 1. Escapa o texto primeiro para segurança (ninguém injeta código malicioso)
+  let html = escapeHTML(text);
+  
+  // 2. Dicionário de marcadores
+  const markers = [
+    // Link: ~l www.google.com l~ OU ~l Manual PDF | www.google.com l~
+    {
+      regex: /~l\s+(.*?)\s+l~/g,
+      replacer: (match, content) => {
+        let label = content;
+        let url = content;
+        if (content.includes('|')) {
+          const parts = content.split('|');
+          label = parts[0].trim();
+          url = parts[1].trim();
+        }
+        if (!url.startsWith('http') && !url.startsWith('mailto:')) url = 'https://' + url;
+        return `<a href="${url}" target="_blank" style="color: var(--moss); text-decoration: underline; font-weight: bold;">${label}</a>`;
+      }
+    },
+    // Negrito: ~b texto importante b~
+    {
+      regex: /~b\s+(.*?)\s+b~/g,
+      replacer: (match, content) => `<strong>${content}</strong>`
+    },
+    // Destaque (Marca-texto): ~h erro crítico h~
+    {
+      regex: /~h\s+(.*?)\s+h~/g,
+      replacer: (match, content) => `<mark style="background: var(--amber-soft); color: var(--amber); padding: 0 4px; border-radius: 4px;">${content}</mark>`
+    }
+  ];
+
+  // 3. Aplica todos os marcadores
+  markers.forEach(m => { html = html.replace(m.regex, m.replacer); });
+  return html;
+}
+
+// --- TRADUTOR PARA WHATSAPP / PRÉVIAS ---
+function cleanMarkersForText(text) {
+  if (!text) return '';
+  let clean = text;
+  // Extrai a URL para o zap: de "~l Site | www.X.com l~" vira "www.X.com"
+  clean = clean.replace(/~l\s+(.*?)\s+l~/g, (match, content) => content.includes('|') ? content.split('|')[1].trim() : content);
+  // Converte Negrito pro formato do zap: ~b X b~ vira *X*
+  clean = clean.replace(/~b\s+(.*?)\s+b~/g, '*$1*');
+  // Tira o destaque para texto puro: ~h X h~ vira _X_
+  clean = clean.replace(/~h\s+(.*?)\s+h~/g, '_$1_');
+  return clean;
+}
 function uuid(){
   if(window.crypto && typeof crypto.randomUUID === 'function'){
     try{ return crypto.randomUUID(); }catch(e){ /* segue para o fallback */ }
@@ -625,20 +706,26 @@ function formatTime(totalSeconds){
   const s = (totalSeconds%60).toString().padStart(2,'0');
   return `${m}:${s}`;
 }
+
 function displayTitle(node){
-  if(node.title && node.title.trim()) return node.title.trim();
-  if(node.type==='text') return (node.text||'').slice(0,44) || 'Sem título';
-  if(node.type==='audio') return 'Gravação de áudio';
-  if(node.type==='image') return 'Imagem';
-  if(node.type==='link') return 'Atalho';
-  return 'Sem título';
+  let t = '';
+  if(node.title && node.title.trim()) t = node.title.trim();
+  else if(node.type==='text') t = (node.text||'').slice(0,44) || 'Sem título';
+  else if(node.type==='audio') t = 'Gravação de áudio';
+  else if(node.type==='image') t = 'Imagem';
+  else if(node.type==='link') t = 'Atalho';
+  else t = 'Sem título';
+  
+  return cleanMarkersForText(t);
 }
+
 function previewText(node){
-  if(node.type==='text') return (node.text||'').slice(0,90);
-  if(node.type==='audio') return node.text || 'Toque para ouvir';
-  if(node.type==='image') return node.text || 'Toque para ver';
+  if(node.type==='text') return cleanMarkersForText(node.text||'').slice(0,90);
+  if(node.type==='audio') return cleanMarkersForText(node.text) || 'Toque para ouvir';
+  if(node.type==='image') return cleanMarkersForText(node.text) || 'Toque para ver';
   return '';
 }
+
 function blobToDataURL(blob){
   return new Promise((resolve,reject)=>{
     const reader = new FileReader();
@@ -789,17 +876,26 @@ async function renderContent(){
   } else if(n.type==='image' && n.mediaBlob){
     mediaHTML = `<img src="${trackURL(n.mediaBlob)}" class="content-image" alt="">`;
   }
+  // LÊ AS PREFERÊNCIAS SALVAS NA MEMÓRIA DO CELULAR
+  const savedZoom = localStorage.getItem('trilha-zoom') === 'true';
+  const savedWrap = localStorage.getItem('trilha-wrap') === 'true';
+
   const bodyText = n.type==='text'
     ? (n.text && n.text.trim()
         ? `<div class="text-block-wrapper">
-             <button type="button" class="btn-copy" id="btnCopyText" title="Copiar texto">
-               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-               Copiar
-             </button>
-             <pre class="content-text">${escapeHTML(n.text)}</pre>
+             <div class="text-toolbar">
+               <button type="button" class="btn-text-tool ${savedZoom ? 'active' : ''}" id="btnToggleZoom" title="Aumentar texto">A+</button>
+               <button type="button" class="btn-text-tool ${savedWrap ? 'active' : ''}" id="btnToggleWrap" title="Quebrar linhas">↩</button>
+               <button type="button" class="btn-text-tool" id="btnCopyText" title="Copiar texto">
+                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                 Copiar
+               </button>
+             </div>
+             <!-- Aplica as classes salvas automaticamente -->
+             <pre class="content-text ${savedZoom ? 'is-large' : ''} ${savedWrap ? 'is-wrap' : ''}" id="preContentText">${formatMarkers(n.text)}</pre>
            </div>`
         : `<p class="content-text content-text--empty">Sem anotação adicional.</p>`)
-    : (n.text && n.text.trim() ? `<p class="content-caption">${escapeHTML(n.text)}</p>` : '');
+    : (n.text && n.text.trim() ? `<p class="content-caption">${formatMarkers(n.text)}</p>` : '');
 
   // Verifica se a anotação atual tem valor de dinheiro (Orçamento)
   const valTitle = extractValue(n.title);
@@ -870,18 +966,21 @@ async function renderContent(){
   document.getElementById('caFav').onclick = async ()=>{ n.favorite=!n.favorite; n.updatedAt=Date.now(); await dbPut(n); render(); };
   document.getElementById('caFlag').onclick = async ()=>{ n.isConclusion=!n.isConclusion; n.updatedAt=Date.now(); await dbPut(n); render(); };
   // Lógica de copiar texto/código
+  // Lógica da Barra de Ferramentas do Texto
+  const preEl = document.getElementById('preContentText');
   const copyBtn = document.getElementById('btnCopyText');
-  if (copyBtn) {
+  const zoomBtn = document.getElementById('btnToggleZoom');
+  const wrapBtn = document.getElementById('btnToggleWrap');
+
+  if (copyBtn && preEl) {
+    // 1. Botão de Copiar Texto Limpo
     copyBtn.onclick = async () => {
       try {
-        await navigator.clipboard.writeText(n.text);
+        await navigator.clipboard.writeText(cleanMarkersForText(n.text));
         const originalHTML = copyBtn.innerHTML;
-        // Muda o visual para "Copiado!" com um ícone de check
-        copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Copiado!`;
+        copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polyline points="20 6 9 17 4 12"></polyline></svg> Copiado!`;
         copyBtn.style.color = 'var(--moss)';
         copyBtn.style.borderColor = 'var(--moss)';
-        
-        // Volta ao normal depois de 2 segundos
         setTimeout(() => {
           copyBtn.innerHTML = originalHTML;
           copyBtn.style.color = '';
@@ -890,6 +989,20 @@ async function renderContent(){
       } catch (err) {
         toast('Erro ao copiar o texto.');
       }
+    };
+
+    // 2. Botão de Zoom (A+) com Memória Persistente
+    zoomBtn.onclick = () => {
+      const isNowActive = preEl.classList.toggle('is-large');
+      zoomBtn.classList.toggle('active');
+      localStorage.setItem('trilha-zoom', isNowActive); // Salva a decisão no celular
+    };
+
+    // 3. Botão de Quebra de Linhas (↩) com Memória Persistente
+    wrapBtn.onclick = () => {
+      const isNowActive = preEl.classList.toggle('is-wrap');
+      wrapBtn.classList.toggle('active');
+      localStorage.setItem('trilha-wrap', isNowActive); // Salva a decisão no celular
     };
   }
   document.getElementById('caDelete').onclick = async ()=>{
@@ -1934,7 +2047,7 @@ function extractValue(text) {
   if(!text) return 0;
   let total = 0;
   
-  // 1. Procura dinheiro na anotação (ex: R$ 150,00)
+  // 1. Procura valores de dinheiro (ex: R$ 150,00)
   let matchMoney = text.match(/R\$\s*(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/i);
   if(!matchMoney) matchMoney = text.match(/\b(\d{1,3}(?:\.\d{3})*,\d{2})\b/);
   if(matchMoney) {
@@ -1943,7 +2056,8 @@ function extractValue(text) {
   }
   
   // 2. Procura tempo de mão de obra (ex: 30m, 2h, 1.5h, 90min)
-  const regexTime = /\b(\d+(?:[.,]\d+)?)\s*(h|m|min|hora|horas)\b/gi;
+  // CORREÇÃO: O Lookahead negativo (?!~) impede de pegar 'h~' ou 'm~' dos marcadores!
+  const regexTime = /\b(\d+(?:[.,]\d+)?)\s*(h(?!~)|m(?!~)|min|hora|horas)\b/gi;
   let matchTime;
   while ((matchTime = regexTime.exec(text)) !== null) {
     const num = parseFloat(matchTime[1].replace(',', '.'));
