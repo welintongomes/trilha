@@ -88,11 +88,11 @@ body.modal-open{overflow:hidden;}
 .icon-btn:hover{background:var(--paper-raised);color:var(--ink);box-shadow:0 0 0 1px var(--line);}
 
 /* Breadcrumb / trilha */
-.breadcrumb{
+/* .breadcrumb{
   display:flex;align-items:center;overflow-x:auto;
   padding:10px 16px 8px;
   scrollbar-width:none;
-}
+} */
 .breadcrumb::-webkit-scrollbar{display:none;}
 .crumb{
   display:flex;align-items:center;gap:6px;background:none;border:none;
@@ -233,17 +233,50 @@ body.modal-open{overflow:hidden;}
 .card-menu:hover{color:var(--ink);background:var(--paper);}
 
 /* FAB */
-.fab{
-  position:fixed;left:30px;bottom:50px;width:56px;height:56px;border-radius:50%;
-  background:var(--moss);color:#fff;border:none;box-shadow:0 8px 22px rgba(0,0,0,.25);
-  display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:40;
+.fab {
+    position: fixed;
+
+    left: max(30px, calc(50% - 450px + 30px));
+    bottom: 50px;
+
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+
+    background: var(--moss);
+    color: #fff;
+    border: none;
+
+    box-shadow: 0 8px 22px rgba(0,0,0,.25);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    cursor: pointer;
+    z-index: 40;
 }
 .fab svg{width:24px;height:24px;}
 .fab:active{transform:scale(.94);}
-.fab-menu{
-  position:fixed;left: 70px;bottom:100px;background:var(--paper-raised);border:1px solid var(--line);
-  border-radius:14px;box-shadow:var(--shadow);padding:6px;display:flex;flex-direction:column;gap:1px;
-  z-index:41;min-width:210px;
+.fab-menu {
+    position: fixed;
+
+    left: max(70px, calc(50% - 450px + 70px));
+    bottom: 100px;
+
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+
+    padding: 6px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+
+    z-index: 41;
+    min-width: 210px;
 }
 .fab-menu button{
   display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;background:none;
@@ -381,9 +414,12 @@ body.modal-open{overflow:hidden;}
 }
 .breadcrumb {
     position: fixed;
-    left: 0;
-    right: 0;
+    left: 50%;
+    transform: translateX(-50%);
     bottom: 0;
+
+    width: calc(100% - 16px);
+    max-width: 900px;
 
     z-index: 69;
 
@@ -398,6 +434,8 @@ body.modal-open{overflow:hidden;}
 
     scrollbar-width: none;
     box-shadow: var(--shadow);
+
+    border-radius: 14px 14px 0 0;
 }
 /* --- Estilos do Orçamento --- */
 .budget-check-wrap { display: flex; align-items: center; padding: 0 0 0 14px; }
