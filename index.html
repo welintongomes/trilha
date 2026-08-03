@@ -2848,49 +2848,79 @@ btnSpeedrun.onclick = async () => {
 };
 
 /* =======================================================================
-   MOTOR DE VOZ (Texto para Fala - Text-to-Speech)
+   MOTOR DE VOZ (Texto para Fala - Text-to-Speech com Wake Lock)
 ======================================================================= */
 let isAutoReading = localStorage.getItem('trilha-auto-read') === 'true';
 
 const TTS = {
   synth: window.speechSynthesis,
   isSpeaking: false,
+  wakeLock: null, // Variável que guarda a "Trava de Tela"
+
+  // Função para segurar a tela acesa
+  keepScreenOn: async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        TTS.wakeLock = await navigator.wakeLock.request('screen');
+      }
+    } catch (err) {
+      // Ignora silenciosamente se o celular não suportar
+    }
+  },
+
+  // Função para devolver o controle de apagar a tela pro celular
+  releaseScreen: () => {
+    if (TTS.wakeLock !== null) {
+      TTS.wakeLock.release().catch(()=>{});
+      TTS.wakeLock = null;
+    }
+  },
   
   // Lê o texto
   speak: (text) => {
     if (!TTS.synth) return;
     
-    // Se já estiver falando, o botão funciona como um "Cala a boca"
+    // Se já estiver falando, cala a boca e solta a tela
     if (TTS.synth.speaking) {
       TTS.synth.cancel();
       TTS.isSpeaking = false;
+      TTS.releaseScreen();
       return;
     }
     
-    // Limpa os marcadores para o robô não ler "Til C til"
     const cleanText = cleanMarkersForText(text);
     if (!cleanText) return;
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.lang = 'pt-BR';
-    utterance.rate = 1.1; // Fala um pouquinho mais rápido para ser dinâmico
+    utterance.rate = 1.1; 
     
-    utterance.onstart = () => { TTS.isSpeaking = true; };
-    utterance.onend = () => { TTS.isSpeaking = false; };
-    utterance.onerror = () => { TTS.isSpeaking = false; };
+    utterance.onstart = () => { 
+      TTS.isSpeaking = true; 
+      TTS.keepScreenOn(); // Trava a tela acesa enquanto fala!
+    };
+    
+    utterance.onend = () => { 
+      TTS.isSpeaking = false; 
+      TTS.releaseScreen(); // Libera a tela quando termina!
+    };
+    
+    utterance.onerror = () => { 
+      TTS.isSpeaking = false; 
+      TTS.releaseScreen(); // Libera a tela se der erro!
+    };
     
     TTS.synth.speak(utterance);
   },
   
-  // Para qualquer fala imediatamente
   stop: () => {
     if (TTS.synth) {
       TTS.synth.cancel();
       TTS.isSpeaking = false;
+      TTS.releaseScreen();
     }
   }
 };
-
 // Quando fechar uma página, para de falar
 const originalCloseModal = closeModal;
 closeModal = () => { TTS.stop(); originalCloseModal(); };
