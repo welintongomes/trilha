@@ -775,6 +775,20 @@ function displayTitle(node){
   return cleanMarkersForText(t);
 }
 
+// --- NOVA FUNÇÃO: Título Colorido para a Tela ---
+function displayFormattedTitle(node){
+  let t = '';
+  if(node.title && node.title.trim()) t = node.title.trim();
+  else if(node.type==='text') t = (node.text||'').slice(0,44) || 'Sem título';
+  else if(node.type==='audio') t = 'Gravação de áudio';
+  else if(node.type==='image') t = 'Imagem';
+  else if(node.type==='link') t = 'Atalho';
+  else t = 'Sem título';
+  
+  // A mágica: joga o título no nosso Motor de Marcadores!
+  return formatMarkers(t);
+}
+
 function previewText(node){
   if(node.type==='text') return cleanMarkersForText(node.text||'').slice(0,90);
   if(node.type==='audio') return cleanMarkersForText(node.text) || 'Toque para ouvir';
@@ -1022,7 +1036,7 @@ async function renderContent(){
         <span class="card-icon card-icon--${n.type}">${icon(n.type)}</span>
         <div class="content-headtext">
           <span class="content-meta">${formatDate(n.createdAt)}${(n.updatedAt && n.updatedAt!==n.createdAt) ? ' · editado '+formatDate(n.updatedAt) : ''}</span>
-          <h1 class="content-title">${escapeHTML(displayTitle(n))}</h1>
+          <h1 class="content-title">${displayFormattedTitle(n)}</h1>
           
         </div>
         
@@ -1211,7 +1225,7 @@ function createCardEl(node, count){
     <button type="button" class="card-body" data-open="${openId}">
       <span class="card-icon card-icon--${node.type}">${icon(node.type)}</span>
       <span class="card-text">
-        <span class="card-title">${escapeHTML(displayTitle(node))}</span>
+        <span class="card-title">${displayFormattedTitle(node)}</span>
         
         <!-- Adicionei regras CSS diretamente aqui para permitir 2 linhas de leitura e não cortar os balões de marcação -->
         <span class="card-preview" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; line-height: 1.5; padding-top: 2px;">
@@ -1426,17 +1440,26 @@ function openTextModal(){
       </div>`,
     onMount:(body)=>{
       body.querySelector('#fCancel').onclick = closeModal;
-      // === MÁGICA DOS MARCADORES: CLICOU NO CHIP, INSERE O CÓDIGO! ===
+      // === MÁGICA DOS MARCADORES: CRIAÇÃO COM RASTREADOR DE FOCO ===
       const fText = body.querySelector('#fText');
+      const fTitle = body.querySelector('#fTitle');
+      
+      // A variável inteligente que guarda onde o cursor está piscando
+      let activeInput = fText; 
+      
+      // Rastreadores de Toque no celular
+      if (fTitle) fTitle.addEventListener('focus', () => { activeInput = fTitle; });
+      if (fText) fText.addEventListener('focus', () => { activeInput = fText; });
+
       const chips = body.querySelectorAll('.marker-chip');
       chips.forEach(chip => {
         chip.onclick = () => {
           const tag = chip.dataset.tag;
-          const start = fText.selectionStart;
-          const end = fText.selectionEnd;
-          const text = fText.value;
+          const start = activeInput.selectionStart;
+          const end = activeInput.selectionEnd;
+          const text = activeInput.value;
           
-          // Se não tiver nada selecionado, ele cria um texto de exemplo
+          // Se não tiver nada selecionado, cria o texto de exemplo
           let defaultText = 'texto';
           if (tag === 'l') defaultText = 'Nome do Site | www.google.com';
           if (tag === 'c') defaultText = 'Custo: R$ 0,00';
@@ -1444,12 +1467,12 @@ function openTextModal(){
           const selected = text.substring(start, end) || defaultText;
           const replacement = `~${tag} ${selected} ${tag}~`;
           
-          // Injeta no texto
-          fText.value = text.substring(0, start) + replacement + text.substring(end);
+          // Injeta no lugar certinho (no Título ou na Anotação)
+          activeInput.value = text.substring(0, start) + replacement + text.substring(end);
           
-          // Devolve o foco para o teclado do celular e já deixa a palavra selecionada!
-          fText.focus();
-          fText.setSelectionRange(start + tag.length + 2, start + tag.length + 2 + selected.length);
+          // Devolve o foco para o teclado do celular já selecionando a palavra
+          activeInput.focus();
+          activeInput.setSelectionRange(start + tag.length + 2, start + tag.length + 2 + selected.length);
         };
       });
       // ==============================================================
@@ -1517,15 +1540,24 @@ function openEditModal(node){
         }
       }
 
-      // === MÁGICA DOS MARCADORES NA EDIÇÃO ===
+      // === MÁGICA DOS MARCADORES NA EDIÇÃO COM RASTREADOR DE FOCO ===
       const eText = body.querySelector('#eText');
+      const eTitle = body.querySelector('#eTitle');
+      
+      // A variável inteligente que guarda onde o cursor está piscando
+      let activeInput = eText; 
+      
+      // Rastreadores de Toque no celular
+      if (eTitle) eTitle.addEventListener('focus', () => { activeInput = eTitle; });
+      if (eText) eText.addEventListener('focus', () => { activeInput = eText; });
+
       const chips = body.querySelectorAll('.marker-chip');
       chips.forEach(chip => {
         chip.onclick = () => {
           const tag = chip.dataset.tag;
-          const start = eText.selectionStart;
-          const end = eText.selectionEnd;
-          const text = eText.value;
+          const start = activeInput.selectionStart;
+          const end = activeInput.selectionEnd;
+          const text = activeInput.value;
           
           let defaultText = 'texto';
           if (tag === 'l') defaultText = 'Nome do Site | www.google.com';
@@ -1534,10 +1566,10 @@ function openEditModal(node){
           const selected = text.substring(start, end) || defaultText;
           const replacement = `~${tag} ${selected} ${tag}~`;
           
-          eText.value = text.substring(0, start) + replacement + text.substring(end);
+          activeInput.value = text.substring(0, start) + replacement + text.substring(end);
           
-          eText.focus();
-          eText.setSelectionRange(start + tag.length + 2, start + tag.length + 2 + selected.length);
+          activeInput.focus();
+          activeInput.setSelectionRange(start + tag.length + 2, start + tag.length + 2 + selected.length);
         };
       });
       // ==========================================
