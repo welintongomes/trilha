@@ -814,22 +814,27 @@ async function buildPath(node){
 async function goTo(nodeId){
   if(nodeId === '' ) nodeId = null;
 
-  // --- MÁGICA DO SPEEDRUN: Marca o tempo gasto na etapa que você acabou de ler ---
+  // 1. DETECTOR DE MARCHA RÉ (Saber se estamos avançando ou voltando)
+  let isGoingBack = false;
+  if (currentNodeId !== null) {
+    // Se o destino é o Início (null) ou algum passo "para trás" que já está no nosso caminho (breadcrumb)
+    if (nodeId === null || breadcrumbPath.find(b => b.id === nodeId)) {
+      isGoingBack = true;
+    }
+  }
+
   // --- MÁGICA DO SPEEDRUN ---
   if(typeof srActive !== 'undefined' && srActive){
     let tempoGasto = 0;
     if (typeof srPaused !== 'undefined' && srPaused) {
-      // Se estiver pausado, salva só o que tinha acumulado antes do pause
       tempoGasto = srStepAccumulated;
     } else {
-      // Se estiver rodando, soma o acumulado com os segundos que passaram até agora
       tempoGasto = srStepAccumulated + Math.floor((Date.now() - srNodeStart) / 1000);
     }
     
     const tituloPasso = currentNode ? displayTitle(currentNode) : 'Início';
     if (tempoGasto > 0) srHistory.push({ title: tituloPasso, time: tempoGasto });
     
-    // Zera os contadores da etapa e reinicia o relógio da nova etapa
     srStepAccumulated = 0;
     if (!srPaused) srNodeStart = Date.now();
   }
@@ -852,18 +857,28 @@ async function goTo(nodeId){
   if (typeof TTS !== 'undefined') TTS.stop();
   
   render();
-  
-  // === MÁGICA DA VOZ: Leitura Automática! ===
-  if (currentNode && typeof isAutoReading !== 'undefined' && isAutoReading) {
-    // Tenta ler o título + o texto, de forma natural
-    const textToRead = (currentNode.title || '') + '. ' + (currentNode.text || '');
-    if (textToRead.trim().length > 2) {
-      // Um pequeno delay pro cérebro humano processar a troca de tela antes de começar a falar
+
+  // === MÁGICA DA VOZ: Leitura Automática Inteligente! ===
+  if (typeof isAutoReading !== 'undefined' && isAutoReading) {
+    let textToRead = '';
+
+    if (currentNodeId === null) {
+      // 1. Se voltou tudo pra raiz
+      textToRead = 'Início';
+    } else if (isGoingBack) {
+      // 2. Se deu "marcha ré", fala SÓ O TÍTULO como confirmação rápida
+      textToRead = currentNode.title || 'Sem título';
+    } else {
+      // 3. Se andou pra frente, lê tudo (Título + Anotação)
+      textToRead = (currentNode.title || '') + '. ' + (currentNode.text || '');
+    }
+
+    if (textToRead.trim().length > 1) {
+      // Um pequeno delay pro cérebro humano processar a troca de tela
       setTimeout(() => { TTS.speak(textToRead); }, 400);
     }
   }
 }
-
 async function createNode({type, title='', text='', mediaBlob=null, mediaMime=null, favorite=false, isConclusion=false, targetId=null}){
   const now = Date.now();
   const node = {
@@ -935,7 +950,35 @@ async function renderContent(){
   if(currentNodeId === null){
     elContent.hidden = true;
     elContent.innerHTML = '';
-    elChildrenHeading.textContent = 'Minhas trilhas';
+    
+    // === NOVO: BOTÃO DE MUDO/VOZ NA TELA INICIAL ===
+    elChildrenHeading.innerHTML = `
+      <div style="display:flex; justify-content:space-between; flex-direction: row-reverse;align-items:center; width:100%;">
+        <span>Minhas trilhas</span>
+        <button type="button" id="btnHomeVoiceToggle" style="
+          background: ${isAutoReading ? 'var(--moss-soft)' : 'var(--paper-raised)'}; 
+          color: ${isAutoReading ? 'var(--moss)' : 'var(--ink-soft)'}; 
+          border: 1px solid ${isAutoReading ? 'var(--moss)' : 'var(--line)'}; 
+          border-radius: 20px; padding: 4px 12px; font-size: 11.5px; font-weight: bold; 
+          cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s ease;">
+          ${isAutoReading ? '🔊 Voz Auto: LIGADA' : '🤫 Voz Auto: MUTADA'}
+        </button>
+      </div>
+    `;
+
+    // Ensina o botão da tela inicial a ligar/desligar a memória
+    setTimeout(() => {
+      const btnV = document.getElementById('btnHomeVoiceToggle');
+      if (btnV) {
+        btnV.onclick = () => {
+          isAutoReading = !isAutoReading;
+          localStorage.setItem('trilha-auto-read', isAutoReading);
+          toast(isAutoReading ? 'Próximo fluxo será falado.' : 'Modo Silencioso Ativado.');
+          renderContent(); // Atualiza a cor do botão na mesma hora
+        };
+      }
+    }, 10);
+    
     return;
   }
   const n = currentNode;
@@ -954,7 +997,7 @@ async function renderContent(){
     ? (n.text && n.text.trim()
         ? `<div class="text-block-wrapper">
              <div class="text-toolbar">
-               <span id="voiceBtnPlace"style="display: flex;"></span> <!-- O botão da voz será injetado aqui -->
+               
                <button type="button" class="btn-text-tool" id="btnCopyText" title="Copiar texto">
                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                  Copiar
@@ -988,7 +1031,7 @@ async function renderContent(){
       ${bodyText}
       ${n.isConclusion ? `<span class="badge badge--lg">${icon('flag')} Etapa Conclusiva</span>` : ''}
       <div class="content-actions">
-        
+        <span id="voiceBtnPlace"style="display: flex;"></span> <!-- O botão da voz será injetado aqui -->
         <div class= "alinhar">
             <button type="button" class="btn btn-ghost" id="caEdit">${icon('edit')} Editar</button>
             <button type="button" class="btn btn-ghost" id="caFlag">${icon('flag')} ${n.isConclusion?'Etapa':'Conclusão?'}</button>
