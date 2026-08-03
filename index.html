@@ -847,7 +847,21 @@ async function goTo(nodeId){
     currentNodeId = nodeId; currentNode = n;
     breadcrumbPath = await buildPath(n);
   }
+  
+  // === MÁGICA DA VOZ: Para o que estava falando antes ===
+  if (typeof TTS !== 'undefined') TTS.stop();
+  
   render();
+  
+  // === MÁGICA DA VOZ: Leitura Automática! ===
+  if (currentNode && typeof isAutoReading !== 'undefined' && isAutoReading) {
+    // Tenta ler o título + o texto, de forma natural
+    const textToRead = (currentNode.title || '') + '. ' + (currentNode.text || '');
+    if (textToRead.trim().length > 2) {
+      // Um pequeno delay pro cérebro humano processar a troca de tela antes de começar a falar
+      setTimeout(() => { TTS.speak(textToRead); }, 400);
+    }
+  }
 }
 
 async function createNode({type, title='', text='', mediaBlob=null, mediaMime=null, favorite=false, isConclusion=false, targetId=null}){
@@ -940,10 +954,11 @@ async function renderContent(){
     ? (n.text && n.text.trim()
         ? `<div class="text-block-wrapper">
              <div class="text-toolbar">
-              <button type="button" class="btn-text-tool" id="btnCopyText" title="Copiar texto">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                Copiar
-              </button>
+               <span id="voiceBtnPlace"style="display: flex;"></span> <!-- O botão da voz será injetado aqui -->
+               <button type="button" class="btn-text-tool" id="btnCopyText" title="Copiar texto">
+                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                 Copiar
+               </button>
                <button type="button" class="btn-text-tool ${savedZoom ? 'active' : ''}" id="btnToggleZoom" title="Aumentar texto">A+</button>
                <button type="button" class="btn-text-tool ${savedWrap ? 'active' : ''}" id="btnToggleWrap" title="Quebrar linhas">↩</button>
              </div>
@@ -1026,7 +1041,15 @@ async function renderContent(){
   const preEl = document.getElementById('preContentText');
   const copyBtn = document.getElementById('btnCopyText');
   const zoomBtn = document.getElementById('btnToggleZoom');
+
   const wrapBtn = document.getElementById('btnToggleWrap');
+  const voicePlace = document.getElementById('voiceBtnPlace');
+
+  // Adiciona o Botão de Voz Mágico
+  if (voicePlace) {
+    const textToRead = (n.title || '') + '. ' + (n.text || '');
+    voicePlace.appendChild(createVoiceButton(textToRead));
+  }
 
   if (copyBtn && preEl) {
     // 1. Botão de Copiar Texto Limpo
@@ -2781,6 +2804,105 @@ btnSpeedrun.onclick = async () => {
   }
 };
 
+/* =======================================================================
+   MOTOR DE VOZ (Texto para Fala - Text-to-Speech)
+======================================================================= */
+let isAutoReading = localStorage.getItem('trilha-auto-read') === 'true';
+
+const TTS = {
+  synth: window.speechSynthesis,
+  isSpeaking: false,
+  
+  // Lê o texto
+  speak: (text) => {
+    if (!TTS.synth) return;
+    
+    // Se já estiver falando, o botão funciona como um "Cala a boca"
+    if (TTS.synth.speaking) {
+      TTS.synth.cancel();
+      TTS.isSpeaking = false;
+      return;
+    }
+    
+    // Limpa os marcadores para o robô não ler "Til C til"
+    const cleanText = cleanMarkersForText(text);
+    if (!cleanText) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = 'pt-BR';
+    utterance.rate = 1.1; // Fala um pouquinho mais rápido para ser dinâmico
+    
+    utterance.onstart = () => { TTS.isSpeaking = true; };
+    utterance.onend = () => { TTS.isSpeaking = false; };
+    utterance.onerror = () => { TTS.isSpeaking = false; };
+    
+    TTS.synth.speak(utterance);
+  },
+  
+  // Para qualquer fala imediatamente
+  stop: () => {
+    if (TTS.synth) {
+      TTS.synth.cancel();
+      TTS.isSpeaking = false;
+    }
+  }
+};
+
+// Quando fechar uma página, para de falar
+const originalCloseModal = closeModal;
+closeModal = () => { TTS.stop(); originalCloseModal(); };
+
+// Adiciona o botão de Voz na barra de botões do texto
+function createVoiceButton(textToRead) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = `btn-text-tool ${isAutoReading ? 'active' : ''}`;
+  btn.id = 'btnToggleVoice';
+  // Se for automático, mostra ondinhas 🔊, se for manual, mostra um fone ou algo discreto 🔈
+  btn.innerHTML = isAutoReading ? '🔊 Auto' : '🔈 Falar';
+  btn.title = 'Toque para ler. Segure para ligar/desligar a Leitura Automática.';
+  
+  let pressTimer;
+  const longPressMs = 600; // 0.6 segundos já é suficiente
+  
+  // Função de Ligar/Desligar Automático
+  const toggleAutoMode = () => {
+    isAutoReading = !isAutoReading;
+    localStorage.setItem('trilha-auto-read', isAutoReading);
+    btn.classList.toggle('active', isAutoReading);
+    btn.innerHTML = isAutoReading ? '🔊 Auto' : '🔈 Falar';
+    toast(isAutoReading ? 'Leitura Automática LIGADA' : 'Leitura Automática DESLIGADA');
+    if (isAutoReading) window.navigator.vibrate && window.navigator.vibrate(50);
+  };
+
+  // Eventos de Toque no Celular (Touch) e no PC (Mouse)
+  const startPress = (e) => {
+    // Evita conflito do toque com o scroll
+    if(e.type==='touchstart') { TTS.touchMoved = false; }
+    pressTimer = setTimeout(() => {
+      toggleAutoMode();
+      pressTimer = null; // Impede que o clique rápido dispare depois do longo
+    }, longPressMs);
+  };
+  
+  const endPress = (e) => {
+    if (e.type==='touchend' && TTS.touchMoved) return; // Se arrastou o dedo, não clica
+    if (pressTimer !== null) {
+      clearTimeout(pressTimer); // Foi um toque rápido
+      TTS.speak(textToRead);
+    }
+    // Previne o "clique fantasma" do Android
+    if(e.type === 'touchend') e.preventDefault(); 
+  };
+
+  btn.addEventListener('mousedown', startPress);
+  btn.addEventListener('touchstart', startPress, {passive: true});
+  btn.addEventListener('mouseup', endPress);
+  btn.addEventListener('touchend', endPress);
+  btn.addEventListener('touchmove', () => { TTS.touchMoved = true; }, {passive: true});
+  
+  return btn;
+}
 /* =======================================================================
    INÍCIO DO APP
 ======================================================================= */
