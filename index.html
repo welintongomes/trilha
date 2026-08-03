@@ -685,10 +685,10 @@ function cleanMarkersForText(text) {
   clean = clean.replace(/~l\s+([\s\S]*?)\s+l~/g, (match, content) => content.includes('|') ? content.split('|')[1].trim() : content);
   
   // C. Converte Negrito: ~b X b~ vira *X*
-  clean = clean.replace(/~b\s+([\s\S]*?)\s+b~/g, '*$1*');
+  clean = clean.replace(/~b\s+([\s\S]*?)\s+b~/g, '$1');
   
   // D. Converte os outros tirando apenas o marcador (Zap não tem cor, entao vira texto puro)
-  clean = clean.replace(/~h\s+([\s\S]*?)\s+h~/g, '_$1_'); // h -> itálico no zap
+  clean = clean.replace(/~h\s+([\s\S]*?)\s+h~/g, '$1'); // h -> texto puro
   clean = clean.replace(/~u\s+([\s\S]*?)\s+u~/g, '$1'); // u -> texto puro
   clean = clean.replace(/~r\s+([\s\S]*?)\s+r~/g, '$1'); // r -> texto puro
   
@@ -1085,17 +1085,35 @@ function createCardEl(node, count){
   const valText = extractValue(node.text);
   const isBudget = (valTitle > 0 || valText > 0);
 
-  // Se for atalho, muda o destino do clique e o textinho de prévia
+  // Se for atalho, muda o destino do clique
   const openId = node.type === 'link' ? node.targetId : node.id;
-  const displayDesc = node.type === 'link' ? '🔗 Atalho para outra etapa' : escapeHTML(previewText(node));
+  
+  // --- MÁGICA DA PRÉVIA COLORIDA ---
+  let displayDesc = '';
+  if (node.type === 'link') {
+    displayDesc = '🔗 Atalho para outra etapa';
+  } else {
+    // 1. Gera o HTML com todas as cores, negritos e destaques!
+    let rawHtml = formatMarkers(node.text || '');
+    if (!rawHtml.trim()) rawHtml = (node.type === 'audio' ? 'Toque para ouvir' : (node.type === 'image' ? 'Toque para ver' : ''));
+    
+    // 2. Proteção HTML: Transforma a tag <a> (Link) em um <span> para não quebrar o clique do botão do Cartão!
+    displayDesc = rawHtml.replace(/<a href="[^"]*"[^>]*>(.*?)<\/a>/g, '<span style="color: var(--moss); text-decoration: underline; font-weight: bold;">🔗 $1</span>');
+  }
 
+  // IMPORTANTE: Removemos o escapeHTML da prévia (displayDesc), pois o formatMarkers já fez essa segurança lá dentro!
   card.innerHTML = `
     ${isBudget && node.type !== 'link' ? `<div class="budget-check-wrap"><input type="checkbox" class="budget-check" data-budget="${node.id}" ${node.isBudgetDone ? 'checked' : ''}></div>` : ''}
     <button type="button" class="card-body" data-open="${openId}">
       <span class="card-icon card-icon--${node.type}">${icon(node.type)}</span>
       <span class="card-text">
         <span class="card-title">${escapeHTML(displayTitle(node))}</span>
-        <span class="card-preview">${displayDesc}</span>
+        
+        <!-- Adicionei regras CSS diretamente aqui para permitir 2 linhas de leitura e não cortar os balões de marcação -->
+        <span class="card-preview" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; line-height: 1.5; padding-top: 2px;">
+          ${displayDesc}
+        </span>
+        
       </span>
       <span class="card-badges">
         ${node.favorite ? `<span class="badge badge--star">${icon('star')}</span>` : ''}
